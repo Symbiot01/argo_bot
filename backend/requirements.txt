@@ -4,6 +4,10 @@ uvicorn[standard]==0.29.0
 gunicorn==22.0.0 # ADDED: Production WSGI server for Vercel
 pydantic==2.8.2 # Recommended explicit dependency
 
+#---Database---
+SQLAlchemy==2.0.43
+psycopg2-binary==2.9.10
+
 # --- Core LangChain and AI Suite ---
 langchain==0.3.27
 langchain-core==0.3.72
