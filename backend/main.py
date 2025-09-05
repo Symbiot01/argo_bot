@@ -16,7 +16,7 @@ import logging
 import os
 
 Base2.metadata.create_all(bind=engine2)
-Base1.metadata.create_all(bind=engine1)
+# Base1.metadata.create_all(bind=engine1)
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +40,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+from routers import userrouter
+
+app.include_router(userrouter.router, prefix="/api/v1", tags=["users"])
 
 @app.get("/")
 async def root():

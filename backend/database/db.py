@@ -16,7 +16,7 @@ def get_db1():
         db.close()
 
 # Database for user data, chat, and messages
-engine2 = create_engine(USER_DATABASE_URL, connect_args={"check_same_thread": False})
+engine2 = create_engine(USER_DATABASE_URL)
 SessionLocal2 = sessionmaker(autocommit=False, autoflush=False, bind=engine2)
 Base2 = declarative_base()
 
