@@ -45,5 +45,6 @@ USER_DATABASE_URL = os.getenv("USER_DATABASE_URL", "sqlite:///./user_data.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+CHAT_TOKEN_EXPIRE_DAYS = 1
 
 logging.info("Configuration loaded successfully.")

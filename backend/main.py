@@ -41,9 +41,10 @@ app.add_middleware(
 )
 
 
-from routers import userrouter
+from routers import userrouter, chatrouter
 
 app.include_router(userrouter.router, prefix="/api/v1", tags=["users"])
+app.include_router(chatrouter.router, prefix="/api/v1/chat", tags=["chat"])
 
 @app.get("/")
 async def root():

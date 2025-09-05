@@ -9,6 +9,8 @@ class Chat(Base2):
     user_id = Column(Integer, ForeignKey('users.id'), index=True)
     description = Column(String)
     started_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime)
+   
 
     def __repr__(self):
         return f"<Chat(id={self.id}, user_id={self.user_id})>"
@@ -18,7 +20,8 @@ class Chat(Base2):
             "id": self.id,
             "user_id": self.user_id,
             "description": self.description,
-            "started_at": self.started_at.isoformat() if self.started_at else None
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None
         }
 
     def from_dict(self, data):
