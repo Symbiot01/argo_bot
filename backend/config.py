@@ -38,6 +38,7 @@ RETRIEVER_SEARCH_TYPE = "mmr"
 RETRIEVER_SEARCH_KWARGS = {"k": 4,"fetch_k": 6, "lambda_mult": 0.8 }
 
 # --- Database Configuration ---
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@host:port/database")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres_buoy:buoy_sih123@host:port/database")
+USER_DATABASE_URL = os.getenv("USER_DATABASE_URL", "sqlite:///./user_data.db")
 
 logging.info("Configuration loaded successfully.")

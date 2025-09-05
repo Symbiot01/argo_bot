@@ -1,13 +1,22 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database.db import Base, engine, get_db
+from database.db import Base1, engine1, get_db1, Base2, engine2, get_db2
 from models import User, Chat, Message
 import uvicorn
 import logging
 import os
 
-Base.metadata.create_all(bind=engine)
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from database.db import Base1, engine1, get_db1, Base2, engine2
+from models import User, Chat, Message
+import uvicorn
+import logging
+import os
+
+Base2.metadata.create_all(bind=engine2)
+Base1.metadata.create_all(bind=engine1)
 
 # Configure logging
 logging.basicConfig(
@@ -48,7 +57,7 @@ async def health_check():
 
 # Example of a route with database dependency
 @app.get("/documents")
-def get_documents(db: Session = Depends(get_db)):
+def get_documents(db: Session = Depends(get_db2)):
     # You need to create the Document model first for this to work
     # documents = db.query(models.Document).all()
     # return documents

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String
-from database.db import Base
+from database.db import Base2
 
-class Chat(Base):
+class Chat(Base2):
     __tablename__ = 'chats'
     
     id = Column(Integer, primary_key=True, index=True)

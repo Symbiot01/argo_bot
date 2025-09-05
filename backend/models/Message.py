@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String
 
-from database.db import Base
+from database.db import Base2
 
 
-class Message(Base):
+class Message(Base2):
     __tablename__ = 'messages'
     
     id = Column(Integer, primary_key=True, index=True)
