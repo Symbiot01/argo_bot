@@ -1,0 +1,40 @@
+    // File: src/components/layout/Sidebar.module.scss
+    // Description: Styles for the collapsible, translucent sidebar.
+
+
+@import "../../styles/variables";
+
+.sidebar {
+  height: 100vh;
+  width: 300px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: rgba($primary-background, 0.6);
+  backdrop-filter: blur(12px);
+  border-right: 1px solid rgba($ui-tertiary, 0.5);
+  transition: transform 0.3s ease-in-out;
+  padding: 1rem;
+  z-index: 10;
+}
+
+.collapsed {
+  transform: translateX(-100%);
+}
+
+.toggleButton {
+  position: absolute;
+  top: 1rem;
+  right: -40px;
+  width: 40px;
+  height: 40px;
+  background-color: $accent-interactive;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}   

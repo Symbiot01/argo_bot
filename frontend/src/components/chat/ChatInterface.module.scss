@@ -1,0 +1,13 @@
+.chatWrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.messageList {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}   

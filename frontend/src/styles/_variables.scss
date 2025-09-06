@@ -1,0 +1,14 @@
+// File: src/styles/_variables.scss
+// Description: Defines your application's color palette and typography as Sass variables for reuse across all style files.
+
+
+// Color Palette
+$primary-background: #0f172a; // Deep Slate
+$accent-interactive: #0ea5e9; // Bright Sky Blue
+$ui-secondary: #1e293b;       // Muted Slate-800 for bubbles/inputs
+$ui-tertiary: #334155;      // Muted Slate-700 for borders
+$text-primary: #e2e8f0;       // Off-White (slate-200)
+$text-accent: #7dd3fc;        // Light Sky Blue
+
+// Typography
+$font-family-sans: "Inter", sans-serif;

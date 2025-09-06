@@ -1,0 +1,22 @@
+// File: src/app/globals.scss
+// Description: Imports the 'Inter' font and applies base styles to the entire application.
+
+@import "../styles/variables";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden; // Prevents scrollbars from the full-screen layout
+}
+
+body {
+  background-color: $primary-background;
+  color: $text-primary;
+  font-family: $font-family-sans;
+}

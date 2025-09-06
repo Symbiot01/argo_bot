@@ -1,0 +1,47 @@
+// File: src/components/chat/ChatInput.module.scss
+// Description: Styles for the text input and send button.
+
+@import "../../styles/variables";
+
+.inputContainer {
+  padding: 1rem;
+  background-color: rgba($primary-background, 0.7);
+  backdrop-filter: blur(5px);
+  border-top: 1px solid rgba($ui-tertiary, 0.5);
+}
+
+.form {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: $ui-secondary;
+  border-radius: 12px;
+  border: 1px solid $ui-tertiary;
+}
+
+.textarea {
+  flex-grow: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: $text-primary;
+  font-family: $font-family-sans;
+  font-size: 1rem;
+  resize: none;
+}
+
+.sendButton {
+  background-color: $accent-interactive;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

@@ -1,0 +1,28 @@
+// File: src/components/chat/ThinkingIndicator.module.scss
+// Description: A simple pulsing dot animation for when the AI is "thinking."
+
+
+@import "../../styles/variables";
+
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0.75rem 1rem;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: $text-accent;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
