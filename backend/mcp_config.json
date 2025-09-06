@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "server_info": {
+    "name": "SQL Database Server",
+    "version": "1.0.0",
+    "description": "MCP server for SQL database operations and query execution"
+  },
+  "databases": {
+    "default": {
+      "type": "postgresql",
+      "url": "postgresql://postgres_buoy:buoy_sih123@localhost:5432/database",
+      "description": "Main PostgreSQL database"
+    },
+    "postgres": {
+      "type": "postgresql", 
+      "url": "postgresql://postgres_buoy:buoy_sih123@localhost:5432/database",
+      "description": "PostgreSQL database"
+    },
+    "user_db": {
+      "type": "sqlite",
+      "url": "sqlite:///./user_data.db",
+      "description": "SQLite user database"
+    },
+    "sqlite": {
+      "type": "sqlite",
+      "url": "sqlite:///./user_data.db", 
+      "description": "SQLite database"
+    }
+  },
+  "tools": [
+    {
+      "name": "execute_sql_query",
+      "description": "Execute SQL query on specified database and return results",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "SQL query to execute"
+        },
+        "database_name": {
+          "type": "string",
+          "description": "Name of the database to query",
+          "default": "default"
+        }
+      }
+    },
+    {
+      "name": "get_database_schema",
+      "description": "Get database schema information including tables, columns, and relationships",
+      "parameters": {
+        "database_name": {
+          "type": "string", 
+          "description": "Name of the database",
+          "default": "default"
+        }
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List all tables in the specified database",
+      "parameters": {
+        "database_name": {
+          "type": "string",
+          "description": "Name of the database", 
+          "default": "default"
+        }
+      }
+    },
+    {
+      "name": "get_table_info",
+      "description": "Get detailed information about a specific table",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "Name of the table"
+        },
+        "database_name": {
+          "type": "string",
+          "description": "Name of the database",
+          "default": "default"
+        }
+      }
+    }
+  ],
+  "output_settings": {
+    "csv_output_directory": "datasets",
+    "include_metadata": true,
+    "max_rows_in_memory": 10000
+  }
+}
