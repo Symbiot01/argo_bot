@@ -30,7 +30,7 @@ export default function DynamicBackground() {
       .attr('d', pathGenerator);
 
     // Fetch and draw coastline data
-    d3.json('/data/coastlines.json').then(data => {
+    d3.json('/data/coastline.json').then(data => {
       svg.selectAll('.coastline')
         .data(data.features)
         .enter().append('path')

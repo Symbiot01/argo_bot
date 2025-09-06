@@ -10,6 +10,10 @@
   border-radius: 12px;
   margin-bottom: 0.5rem;
   line-height: 1.5;
+  text-align: center;
+
+ 
+  
 }
 
 .user {
@@ -21,6 +25,6 @@
 
 .ai {
   background-color: $ui-secondary;
-  align-self: flex-start;
+  align-self: center;
   border-bottom-left-radius: 4px;
 }
