@@ -4,7 +4,7 @@ import logging
 import json
 import asyncio
 import os
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
 
@@ -15,6 +15,10 @@ from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 import config
+
+# Import utility functions
+from services.initialise_sql_vector_db import load_database_schema
+from utility_functions.chat_history import get_chat_history, format_chat_history_for_context
 
 # MCP Client imports
 import mcp
@@ -154,67 +158,161 @@ def initialize_sql_llm_and_embeddings():
         logging.error(f"Failed to initialize SQL AI models: {e}")
         raise
 
-def create_sql_rag_chain(llm, vector_store, mcp_client):
+def create_sql_rag_chain(llm, vector_store, chat_id: Optional[int] = None):
     """
-    Creates a RAG chain specifically for SQL query generation.
-    This chain uses database schema knowledge from vector store and MCP client for execution.
+    Creates a RAG chain for SQL query generation that returns JSON responses with either SQL queries or HTML content.
+    Uses static schema file and includes chat history context.
     
     Args:
         llm: The initialized language model.
-        vector_store: Vector store containing database schema and query examples.
-        mcp_client: MCP client for database operations.
+        vector_store: Vector store containing SQL query examples.
+        chat_id: Optional chat ID for including conversation history.
     
     Returns:
-        A runnable LangChain object for SQL query generation.
+        A runnable LangChain object for SQL response generation.
     """
-    logging.info("Creating SQL RAG chain...")
+    logging.info("Creating SQL RAG chain with static schema...")
 
-    # Retriever for database schema and SQL examples
-    schema_retriever = vector_store.as_retriever(
+    # Query examples retriever
+    query_retriever = vector_store.as_retriever(
         search_type=config.RETRIEVER_SEARCH_TYPE,
         search_kwargs=config.RETRIEVER_SEARCH_KWARGS
     )
 
-    sql_template = """You are an expert SQL query generator with deep knowledge of database schemas and SQL best practices.
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+    
+    def format_schema_info(schema_data: Dict[str, Any]) -> str:
+        """Format schema data into readable string"""
+        if not schema_data:
+            return "No database schema information available."
+        
+        schema_text = f"DATABASE: {schema_data.get('database_name', 'Unknown')}\n"
+        schema_text += f"DESCRIPTION: {schema_data.get('description', 'No description')}\n\n"
+        
+        if "tables" in schema_data:
+            schema_text += "TABLES:\n"
+            for table_name, table_info in schema_data["tables"].items():
+                schema_text += f"\nTable: {table_name}\n"
+                schema_text += f"Description: {table_info.get('description', 'No description')}\n"
+                schema_text += "Columns:\n"
+                
+                if "columns" in table_info:
+                    for col_name, col_info in table_info["columns"].items():
+                        col_line = f"  - {col_name}: {col_info.get('type', 'unknown')}"
+                        if col_info.get('primary_key', False):
+                            col_line += " (PRIMARY KEY)"
+                        if col_info.get('foreign_key'):
+                            col_line += f" (FK -> {col_info['foreign_key']})"
+                        if not col_info.get('nullable', True):
+                            col_line += " (NOT NULL)"
+                        col_line += f" - {col_info.get('description', '')}\n"
+                        schema_text += col_line
+                
+                if "relationships" in table_info:
+                    schema_text += "Relationships:\n"
+                    for rel in table_info["relationships"]:
+                        schema_text += f"  - {rel}\n"
+        
+        return schema_text
+    
+    def create_context_with_chat_history(inputs):
+        """Retrieve query examples and prepare context with chat history"""
+        question = inputs["question"]
+        
+        # Get relevant query examples
+        query_examples = query_retriever.get_relevant_documents(question)
+        examples_context = format_docs(query_examples)
+        
+        # Load static schema
+        schema_data = load_database_schema()
+        schema_context = format_schema_info(schema_data)
+        
+        # Get chat history if chat_id is provided
+        chat_context = ""
+        if chat_id:
+            chat_history = get_chat_history(chat_id, limit=10)
+            chat_context = format_chat_history_for_context(chat_history)
+        
+        return {
+            "question": question,
+            "query_examples": examples_context,
+            "schema_info": schema_context,
+            "chat_history": chat_context
+        }
 
-INSTRUCTIONS:
-1. Generate ONLY valid SQL queries based on the provided database schema
-2. Use the schema information to understand table structures, relationships, and constraints
-3. Follow SQL best practices and optimize for performance
-4. Return ONLY the SQL query without explanations unless specifically requested
-5. Use appropriate JOINs, WHERE clauses, and aggregations as needed
-6. Ensure proper syntax for PostgreSQL database
+    sql_template = """You are an intelligent SQL assistant that analyzes questions and provides appropriate responses.
 
-DATABASE SCHEMA CONTEXT:
-{schema_context}
+DATABASE SCHEMA INFORMATION:
+{schema_info}
 
-SQL QUERY EXAMPLES (for reference):
-{example_context}
+RELEVANT SQL QUERY EXAMPLES:
+{query_examples}
+
+{chat_history_section}
 
 USER QUESTION: {question}
 
+INSTRUCTIONS:
+Analyze the question and determine if it requires database query execution or informational response.
+
+For DATA QUERIES (requiring database access):
+- Questions asking for specific data, reports, analytics, calculations
+- Questions requiring filtering, searching, or aggregating data
+- Questions about finding, comparing, or analyzing records
+
+For INFORMATIONAL QUERIES (general help/explanations):
+- Questions about concepts, definitions, or how things work
+- General help or guidance requests
+- Non-data related questions
+
+RESPONSE FORMAT:
+Return a valid JSON object with this exact structure:
+
+For SQL queries:
+{{
+    "sql": "yes",
+    "query": "SELECT * FROM table_name WHERE condition;"
+}}
+
+For HTML responses:
+{{
+    "sql": "no",
+    "query": "<html><body><h1>Title</h1><p>Informative content...</p></body></html>"
+}}
+
 REQUIREMENTS:
-- Generate syntactically correct PostgreSQL SQL
-- Use proper table and column names from the schema
-- Include appropriate WHERE, JOIN, ORDER BY, GROUP BY clauses as needed
-- Optimize for readability and performance
-- Handle edge cases and data types correctly
+- Return ONLY the JSON object, no additional text
+- For SQL: Generate syntactically correct PostgreSQL queries using the schema information
+- For HTML: Create well-formatted HTML with proper tags (h1, h2, p, ul, li, strong, etc.)
+- Use the schema information to ensure correct table and column names
+- Consider the conversation history when generating responses
+- Ensure JSON is valid and properly escaped
 
-SQL QUERY:"""
+JSON RESPONSE:"""
     
-    prompt = PromptTemplate.from_template(sql_template)
-
-    def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs)
-
-    # SQL RAG chain with schema-aware query generation
+    def format_prompt_with_context(inputs):
+        """Format the prompt with schema and chat history"""
+        chat_history_section = ""
+        if inputs.get("chat_history") and inputs["chat_history"] != "No previous conversation history available.":
+            chat_history_section = f"""
+CONVERSATION CONTEXT:
+{inputs["chat_history"]}
+"""
+        else:
+            chat_history_section = ""
+        
+        return sql_template.format(
+            schema_info=inputs["schema_info"],
+            query_examples=inputs["query_examples"],
+            chat_history_section=chat_history_section,
+            question=inputs["question"]
+        )
+    
+    # SQL RAG chain with static schema and chat history
     sql_rag_chain = (
-        {
-            "schema_context": itemgetter("question") | schema_retriever | format_docs,
-            "example_context": lambda x: format_docs(x.get('examples', [])),
-            "question": itemgetter("question")
-        }
-        | prompt
+        create_context_with_chat_history
+        | format_prompt_with_context
         | llm
         | StrOutputParser()
     )
@@ -222,108 +320,259 @@ SQL QUERY:"""
     logging.info("SQL RAG chain is ready.")
     return sql_rag_chain
 
-async def execute_sql_with_context(rag_chain, mcp_client, question: str, 
-                                 database_name: str = None) -> Dict[str, Any]:
+# Legacy function name for backward compatibility
+def create_unified_rag_chain(llm, vector_store, schema_retriever=None, chat_id: Optional[int] = None):
+    """Legacy wrapper for create_sql_rag_chain"""
+    return create_sql_rag_chain(llm, vector_store, chat_id)
+
+async def execute_sql_with_context(sql_chain, mcp_client, question: str, 
+                                 database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
     """
-    Execute SQL query generation and execution pipeline.
+    Execute SQL query processing pipeline that handles both SQL and HTML responses.
     
     Args:
-        rag_chain: The SQL RAG chain
+        sql_chain: The SQL RAG chain
         mcp_client: MCP client for database operations
         question: User's natural language question
         database_name: Target database name
+        chat_id: Optional chat ID for context
     
     Returns:
-        Dict containing SQL query, results, and CSV file path
+        Dict containing the response, execution results, and CSV file path if applicable
     """
     try:
-        # Generate SQL query using RAG chain
-        logging.info(f"Generating SQL query for: {question}")
+        # Generate response using SQL chain
+        logging.info(f"Processing question: {question}")
         
         chain_input = {"question": question}
-        sql_query = await rag_chain.ainvoke(chain_input)
+        response_text = await sql_chain.ainvoke(chain_input)
         
-        # Clean up the SQL query (remove any markdown formatting)
-        sql_query = sql_query.strip()
-        if sql_query.startswith("```sql"):
-            sql_query = sql_query[6:]
-        if sql_query.endswith("```"):
-            sql_query = sql_query[:-3]
-        sql_query = sql_query.strip()
+        # Clean up the response (remove any markdown formatting)
+        response_text = response_text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
         
-        logging.info(f"Generated SQL query: {sql_query}")
+        logging.info(f"Generated response: {response_text}")
         
-        # Execute query through MCP client
-        result = await mcp_client.execute_sql_query(sql_query, database_name)
+        # Parse JSON response
+        try:
+            json_response = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON response: {e}")
+            return {
+                "question": question,
+                "error": f"Invalid JSON response: {str(e)}",
+                "success": False,
+                "response_type": "error"
+            }
         
-        response = {
-            "question": question,
-            "sql_query": sql_query,
-            "execution_result": result,
-            "success": "error" not in result
-        }
-        
-        if "csv_file" in result:
-            response["csv_file"] = result["csv_file"]
-            logging.info(f"Query executed successfully. Results saved to: {result['csv_file']}")
-        
-        return response
+        # Check if SQL execution is required
+        if json_response.get("sql", "").lower() == "yes":
+            # SQL query needs to be executed
+            sql_query = json_response.get("query", "")
+            
+            if not sql_query:
+                return {
+                    "question": question,
+                    "error": "No SQL query provided in response",
+                    "success": False,
+                    "response_type": "error"
+                }
+            
+            logging.info(f"Executing SQL query: {sql_query}")
+            
+            # Execute query through MCP client
+            result = await mcp_client.execute_sql_query(sql_query, database_name)
+            
+            response = {
+                "question": question,
+                "response_type": "sql",
+                "sql_query": sql_query,
+                "execution_result": result,
+                "success": "error" not in result,
+                "chat_id": chat_id
+            }
+            
+            if "csv_file" in result:
+                response["csv_file"] = result["csv_file"]
+                logging.info(f"Query executed successfully. Results saved to: {result['csv_file']}")
+            
+            return response
+            
+        else:
+            # HTML response - no database execution needed
+            html_content = json_response.get("query", "")
+            
+            logging.info("Generated HTML response (no database execution required)")
+            
+            return {
+                "question": question,
+                "response_type": "html",
+                "html_content": html_content,
+                "success": True,
+                "chat_id": chat_id
+            }
         
     except Exception as e:
-        logging.error(f"Error in SQL execution pipeline: {e}")
+        logging.error(f"Error in SQL query pipeline: {e}")
         return {
             "question": question,
             "error": str(e),
-            "success": False
+            "success": False,
+            "response_type": "error",
+            "chat_id": chat_id
         }
 
-async def astream_sql_response(rag_chain, mcp_client, question: str, 
-                              database_name: str = None) -> AsyncGenerator[str, None]:
+# Legacy function name for backward compatibility
+async def execute_unified_query(unified_chain, mcp_client, question: str, 
+                               database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
+    """Legacy wrapper for execute_sql_with_context"""
+    return await execute_sql_with_context(unified_chain, mcp_client, question, database_name, chat_id)
+
+async def astream_unified_response(unified_chain, mcp_client, question: str, 
+                                  database_name: str = None) -> AsyncGenerator[str, None]:
     """
-    Stream SQL query generation and execution results.
+    Stream unified response generation that handles both SQL and HTML responses.
     
     Args:
-        rag_chain: The SQL RAG chain
+        unified_chain: The unified RAG chain
         mcp_client: MCP client for database operations
         question: User's natural language question
         database_name: Target database name
     
     Yields:
-        str: Chunks of the response including SQL query and results
+        str: Chunks of the response including JSON output and execution results if SQL
     """
     try:
         yield f"🔍 Analyzing question: {question}\n\n"
         
-        # Generate SQL query
-        yield "⚡ Generating SQL query...\n"
+        # Generate response using unified chain
+        yield "⚡ Generating response...\n"
         chain_input = {"question": question}
         
-        sql_query = ""
-        async for chunk in rag_chain.astream(chain_input):
-            sql_query += chunk
+        response_text = ""
+        async for chunk in unified_chain.astream(chain_input):
+            response_text += chunk
             yield chunk
         
-        yield "\n\n📊 Executing query...\n"
+        yield "\n\n� Processing response...\n"
         
-        # Clean and execute SQL
-        sql_query = sql_query.strip()
-        if sql_query.startswith("```sql"):
-            sql_query = sql_query[6:]
-        if sql_query.endswith("```"):
-            sql_query = sql_query[:-3]
-        sql_query = sql_query.strip()
+        # Clean up the response
+        response_text = response_text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
         
-        # Execute through MCP client
-        result = await mcp_client.execute_sql_query(sql_query, database_name)
+        # Parse JSON response
+        try:
+            json_response = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            yield f"❌ Error parsing JSON response: {str(e)}\n"
+            return
         
-        if "error" in result:
-            yield f"❌ Error executing query: {result['error']}\n"
+        # Check if SQL execution is required
+        if json_response.get("sql", "").lower() == "yes":
+            sql_query = json_response.get("query", "")
+            
+            if not sql_query:
+                yield "❌ Error: No SQL query provided in response\n"
+                return
+            
+            yield f"📊 Executing SQL query...\n"
+            
+            # Execute through MCP client
+            result = await mcp_client.execute_sql_query(sql_query, database_name)
+            
+            if "error" in result:
+                yield f"❌ Error executing query: {result['error']}\n"
+            else:
+                yield f"✅ Query executed successfully!\n"
+                if "csv_file" in result:
+                    yield f"📁 Results saved to: {result['csv_file']}\n"
+                if "row_count" in result:
+                    yield f"📈 Rows returned: {result['row_count']}\n"
         else:
-            yield f"✅ Query executed successfully!\n"
-            if "csv_file" in result:
-                yield f"📁 Results saved to: {result['csv_file']}\n"
-            if "row_count" in result:
-                yield f"📈 Rows returned: {result['row_count']}\n"
+            # HTML response - no database execution needed
+            yield "Generated HTML response (no database execution required)\n"
+            yield "Response completed!\n"
         
     except Exception as e:
-        yield f"❌ Error in SQL pipeline: {str(e)}\n"
+        yield f"Error in unified pipeline: {str(e)}\n"
+
+async def astream_sql_response(sql_chain, mcp_client, question: str, 
+                              database_name: str = None, chat_id: Optional[int] = None) -> AsyncGenerator[str, None]:
+    """
+    Stream SQL response generation that handles both SQL and HTML responses.
+    
+    Args:
+        sql_chain: The SQL RAG chain
+        mcp_client: MCP client for database operations
+        question: User's natural language question
+        database_name: Target database name
+        chat_id: Optional chat ID for context
+    
+    Yields:
+        str: Chunks of the response including JSON output and execution results if SQL
+    """
+    try:
+        yield f"Analyzing question: {question}\n\n"
+        
+        # Generate response using SQL chain
+        yield "Generating response...\n"
+        chain_input = {"question": question}
+        
+        response_text = ""
+        async for chunk in sql_chain.astream(chain_input):
+            response_text += chunk
+            yield chunk
+        
+        yield "\n\nProcessing response...\n"
+        
+        # Clean up the response
+        response_text = response_text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        # Parse JSON response
+        try:
+            json_response = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            yield f"Error parsing JSON response: {str(e)}\n"
+            return
+        
+        # Check if SQL execution is required
+        if json_response.get("sql", "").lower() == "yes":
+            sql_query = json_response.get("query", "")
+            
+            if not sql_query:
+                yield "Error: No SQL query provided in response\n"
+                return
+            
+            yield f"Executing SQL query...\n"
+            
+            # Execute through MCP client
+            result = await mcp_client.execute_sql_query(sql_query, database_name)
+            
+            if "error" in result:
+                yield f"Error executing query: {result['error']}\n"
+            else:
+                yield f"Query executed successfully!\n"
+                if "csv_file" in result:
+                    yield f"Results saved to: {result['csv_file']}\n"
+                if "row_count" in result:
+                    yield f"Rows returned: {result['row_count']}\n"
+        else:
+            # HTML response - no database execution needed
+            yield "Generated HTML response (no database execution required)\n"
+            yield "Response completed!\n"
+        
+    except Exception as e:
+        yield f"Error in SQL pipeline: {str(e)}\n"

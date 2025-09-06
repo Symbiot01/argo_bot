@@ -1,0 +1,198 @@
+{
+  "database_name": "main_database",
+  "description": "Main application database containing user, chat, and message data",
+  "tables": {
+    "users": {
+      "description": "User account information and authentication data",
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "description": "Unique user identifier"
+        },
+        "username": {
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "unique": true,
+          "description": "Unique username for login"
+        },
+        "email": {
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "unique": true,
+          "description": "User email address"
+        },
+        "password_hash": {
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "description": "Hashed password for authentication"
+        },
+        "first_name": {
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "description": "User's first name"
+        },
+        "last_name": {
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "description": "User's last name"
+        },
+        "created_at": {
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "description": "Account creation timestamp"
+        },
+        "updated_at": {
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "description": "Last account update timestamp"
+        },
+        "is_active": {
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": true,
+          "description": "Whether the user account is active"
+        },
+        "last_login": {
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "description": "Last login timestamp"
+        }
+      },
+      "indexes": [
+        "idx_users_username",
+        "idx_users_email",
+        "idx_users_created_at"
+      ],
+      "relationships": [
+        "One-to-many with chats (user can have multiple chats)",
+        "One-to-many with messages (user can send multiple messages)"
+      ]
+    },
+    "chats": {
+      "description": "Chat sessions between users and the system",
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "description": "Unique chat identifier"
+        },
+        "user_id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "foreign_key": "users.id",
+          "description": "Reference to the user who started the chat"
+        },
+        "description": {
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "description": "Brief description or title of the chat"
+        },
+        "started_at": {
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "description": "When the chat session was started"
+        },
+        "expires_at": {
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "description": "When the chat session expires"
+        }
+      },
+      "indexes": [
+        "idx_chats_user_id",
+        "idx_chats_started_at",
+        "idx_chats_expires_at"
+      ],
+      "relationships": [
+        "Many-to-one with users (chat belongs to a user)",
+        "One-to-many with messages (chat can have multiple messages)"
+      ]
+    },
+    "messages": {
+      "description": "Individual messages within chat sessions",
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "description": "Unique message identifier"
+        },
+        "user_id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "foreign_key": "users.id",
+          "description": "Reference to the user who sent the message"
+        },
+        "chat_id": {
+          "type": "INTEGER",
+          "nullable": false,
+          "foreign_key": "chats.id",
+          "description": "Reference to the chat session"
+        },
+        "message": {
+          "type": "TEXT",
+          "nullable": true,
+          "description": "The actual message content from the user"
+        },
+        "response": {
+          "type": "TEXT",
+          "nullable": true,
+          "description": "The system's response to the message"
+        },
+        "message_index": {
+          "type": "INTEGER",
+          "nullable": true,
+          "description": "Sequential index of the message in the chat"
+        },
+        "response_media_urls": {
+          "type": "TEXT",
+          "nullable": true,
+          "description": "URLs to any media files in the response"
+        },
+        "timestamp": {
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "description": "When the message was sent"
+        }
+      },
+      "indexes": [
+        "idx_messages_user_id",
+        "idx_messages_chat_id",
+        "idx_messages_timestamp",
+        "idx_messages_message_index"
+      ],
+      "relationships": [
+        "Many-to-one with users (message belongs to a user)",
+        "Many-to-one with chats (message belongs to a chat)"
+      ]
+    }
+  },
+  "common_queries": [
+    {
+      "description": "Get all active users",
+      "query": "SELECT * FROM users WHERE is_active = true",
+      "tables": ["users"]
+    },
+    {
+      "description": "Get chat history for a specific user",
+      "query": "SELECT c.*, COUNT(m.id) as message_count FROM chats c LEFT JOIN messages m ON c.id = m.chat_id WHERE c.user_id = ? GROUP BY c.id ORDER BY c.started_at DESC",
+      "tables": ["chats", "messages"]
+    },
+    {
+      "description": "Get recent messages in a chat",
+      "query": "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT 50",
+      "tables": ["messages"]
+    },
+    {
+      "description": "Get user information with latest chat",
+      "query": "SELECT u.*, c.started_at as last_chat_started FROM users u LEFT JOIN chats c ON u.id = c.user_id WHERE u.id = ? ORDER BY c.started_at DESC LIMIT 1",
+      "tables": ["users", "chats"]
+    }
+  ]
+}

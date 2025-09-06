@@ -46,18 +46,16 @@ class SQLLLMService:
             # Initialize Pinecone for SQL knowledge base
             pinecone_index = initialize_sql_pinecone()
             
-            # Setup SQL knowledge base with database schema
+            # Setup SQL knowledge base without database schema
             self.vector_store = await setup_sql_knowledge_base(
                 pinecone_index, 
-                self.embeddings, 
-                self.mcp_client
+                self.embeddings
             )
             
-            # Create RAG chain for SQL generation
+            # Create RAG chain for SQL generation (without schema retriever)
             self.rag_chain = create_sql_rag_chain(
                 self.llm, 
-                self.vector_store, 
-                self.mcp_client
+                self.vector_store
             )
             
             self.initialized = True
@@ -67,13 +65,14 @@ class SQLLLMService:
             logging.error(f"Failed to initialize SQL LLM service: {e}")
             raise
     
-    async def generate_and_execute_sql(self, question: str, database_name: str = None) -> Dict[str, Any]:
+    async def generate_and_execute_sql(self, question: str, database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Generate SQL query from natural language and execute it
         
         Args:
             question: Natural language question
             database_name: Target database name
+            chat_id: Chat ID for conversation context
         
         Returns:
             Dictionary containing query, results, and metadata
@@ -82,11 +81,18 @@ class SQLLLMService:
             await self.initialize()
         
         try:
+            # Create RAG chain with chat context if provided
+            if chat_id:
+                rag_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+            else:
+                rag_chain = self.rag_chain
+            
             result = await execute_sql_with_context(
-                self.rag_chain,
+                rag_chain,
                 self.mcp_client,
                 question,
-                database_name
+                database_name,
+                chat_id
             )
             
             return result
@@ -96,16 +102,18 @@ class SQLLLMService:
             return {
                 "question": question,
                 "error": str(e),
-                "success": False
+                "success": False,
+                "chat_id": chat_id
             }
     
-    async def stream_sql_response(self, question: str, database_name: str = None):
+    async def stream_sql_response(self, question: str, database_name: str = None, chat_id: Optional[int] = None):
         """
         Stream SQL query generation and execution results
         
         Args:
             question: Natural language question
             database_name: Target database name
+            chat_id: Chat ID for conversation context
         
         Yields:
             String chunks of the response
@@ -113,11 +121,18 @@ class SQLLLMService:
         if not self.initialized:
             await self.initialize()
         
+        # Create RAG chain with chat context if provided
+        if chat_id:
+            rag_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+        else:
+            rag_chain = self.rag_chain
+        
         async for chunk in astream_sql_response(
-            self.rag_chain,
+            rag_chain,
             self.mcp_client,
             question,
-            database_name
+            database_name,
+            chat_id
         ):
             yield chunk
     
@@ -262,15 +277,15 @@ async def get_sql_service() -> SQLLLMService:
     return _sql_service
 
 # Convenience functions for direct use
-async def generate_sql_query(question: str, database_name: str = None) -> Dict[str, Any]:
+async def generate_sql_query(question: str, database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
     """Generate and execute SQL query from natural language question"""
     service = await get_sql_service()
-    return await service.generate_and_execute_sql(question, database_name)
+    return await service.generate_and_execute_sql(question, database_name, chat_id)
 
-async def stream_sql_query(question: str, database_name: str = None):
+async def stream_sql_query(question: str, database_name: str = None, chat_id: Optional[int] = None):
     """Stream SQL query generation and execution"""
     service = await get_sql_service()
-    async for chunk in service.stream_sql_response(question, database_name):
+    async for chunk in service.stream_sql_response(question, database_name, chat_id):
         yield chunk
 
 async def execute_sql_query(query: str, database_name: str = None) -> Dict[str, Any]:

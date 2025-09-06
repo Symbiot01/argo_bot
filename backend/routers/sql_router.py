@@ -1,7 +1,7 @@
 # routers/sql_router.py
 
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import logging
@@ -9,13 +9,14 @@ import os
 import asyncio
 from datetime import datetime
 
+from agents.sqlagent_invocation import (
+    invoke_sql_agent,
+    stream_sql_agent,
+    get_agent_schema
+)
 from utility_functions.sql_llm_functions import (
     get_sql_service,
-    generate_sql_query,
-    stream_sql_query,
     execute_sql_query,
-    get_schema_info,
-    get_tables_list,
     get_query_results
 )
 
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/sql", tags=["SQL Operations"])
 class SQLQueryRequest(BaseModel):
     question: str
     database_name: Optional[str] = None
+    chat_id: Optional[int] = None
 
 class RawSQLRequest(BaseModel):
     query: str
@@ -47,30 +49,45 @@ class TableInfoRequest(BaseModel):
 @router.post("/generate-query")
 async def generate_and_execute_query(request: SQLQueryRequest):
     """
-    Generate SQL query from natural language and execute it.
-    Returns query, results, and CSV file path.
+    Generate SQL query from natural language and execute it, or return HTML response.
+    Returns query results with CSV file path for SQL, or HTML content for informational queries.
     """
     try:
-        logger.info(f"Generating SQL query for: {request.question}")
+        logger.info(f"Processing query through SQL Agent: {request.question}")
         
-        result = await generate_sql_query(
+        result = await invoke_sql_agent(
             question=request.question,
-            database_name=request.database_name
+            database_name=request.database_name,
+            chat_id=request.chat_id
         )
         
         if result.get("success", False):
-            return {
-                "status": "success",
-                "question": result["question"],
-                "sql_query": result["sql_query"],
-                "execution_result": result["execution_result"],
-                "csv_file": result.get("csv_file"),
-                "message": "Query generated and executed successfully"
-            }
+            if result.get("response_type") == "sql":
+                # SQL query was executed
+                return {
+                    "status": "success",
+                    "response_type": "sql",
+                    "question": result["question"],
+                    "sql_query": result["sql_query"],
+                    "execution_result": result["execution_result"],
+                    "csv_file": result.get("csv_file"),
+                    "message": "SQL query generated and executed successfully"
+                }
+            elif result.get("response_type") == "html":
+                # HTML response was generated
+                return HTMLResponse(
+                    content=result["html_content"],
+                    status_code=200
+                )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown response type: {result.get('response_type')}"
+                )
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Query execution failed: {result.get('error', 'Unknown error')}"
+                detail=f"Query processing failed: {result.get('error', 'Unknown error')}"
             )
             
     except Exception as e:
@@ -80,17 +97,18 @@ async def generate_and_execute_query(request: SQLQueryRequest):
 @router.post("/stream-query")
 async def stream_query_generation(request: SQLQueryRequest):
     """
-    Stream SQL query generation and execution process.
+    Stream SQL query generation and execution process, or HTML response generation.
     Returns a streaming response with real-time updates.
     """
     try:
-        logger.info(f"Streaming SQL query for: {request.question}")
+        logger.info(f"Streaming query processing for: {request.question}")
         
         async def generate():
             try:
-                async for chunk in stream_sql_query(
+                async for chunk in stream_sql_agent(
                     question=request.question,
-                    database_name=request.database_name
+                    database_name=request.database_name,
+                    chat_id=request.chat_id
                 ):
                     yield f"data: {chunk}\n\n"
                 yield "data: [DONE]\n\n"
@@ -149,7 +167,7 @@ async def get_database_schema(request: DatabaseRequest):
     try:
         logger.info(f"Getting schema for database: {request.database_name or 'default'}")
         
-        schema = await get_schema_info(database_name=request.database_name)
+        schema = await get_agent_schema(database_name=request.database_name)
         
         if "error" not in schema:
             return {
@@ -168,17 +186,50 @@ async def get_database_schema(request: DatabaseRequest):
         logger.error(f"Error in get_database_schema: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/agent-query")
+async def process_agent_query(request: SQLQueryRequest):
+    """
+    Process query through SQL Agent and return JSON response indicating query type and content.
+    Returns structured response with SQL query or HTML content.
+    """
+    try:
+        logger.info(f"Processing agent query: {request.question}")
+        
+        result = await invoke_sql_agent(
+            question=request.question,
+            database_name=request.database_name,
+            chat_id=request.chat_id
+        )
+        
+        return {
+            "status": "success" if result.get("success", False) else "error",
+            "question": result["question"],
+            "response_type": result.get("response_type", "error"),
+            "data": result,
+            "message": "Query processed successfully" if result.get("success", False) else f"Error: {result.get('error', 'Unknown error')}"
+        }
+            
+    except Exception as e:
+        logger.error(f"Error in process_agent_query: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/tables")
 async def list_database_tables(request: DatabaseRequest):
     """
-    List all tables in the specified database.
+    List all tables in the specified database through the agent.
     """
     try:
         logger.info(f"Listing tables for database: {request.database_name or 'default'}")
         
-        tables = await get_tables_list(database_name=request.database_name)
+        # Use the schema endpoint to get table information
+        schema = await get_agent_schema(database_name=request.database_name)
         
-        if "error" not in tables:
+        if "error" not in schema:
+            # Extract table names from schema if available
+            tables = []
+            if isinstance(schema, dict) and "tables" in schema:
+                tables = list(schema["tables"].keys()) if isinstance(schema["tables"], dict) else schema["tables"]
+            
             return {
                 "status": "success",
                 "database_name": request.database_name or "default",
@@ -188,7 +239,7 @@ async def list_database_tables(request: DatabaseRequest):
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to list tables: {tables['error']}"
+                detail=f"Failed to list tables: {schema['error']}"
             )
             
     except Exception as e:
@@ -307,24 +358,25 @@ async def preview_csv_file(filename: str, rows: int = 100):
 @router.get("/health")
 async def health_check():
     """
-    Health check endpoint for SQL service.
+    Health check endpoint for SQL service and agent.
     """
     try:
-        service = await get_sql_service()
+        # Import the agent to check its status
+        from agents.sqlagent_invocation import sql_agent
         
         return {
             "status": "healthy",
-            "service": "SQL LLM Service",
-            "initialized": service.initialized,
+            "service": "SQL Agent Service",
+            "agent_initialized": sql_agent.is_initialized,
             "timestamp": datetime.now().isoformat(),
-            "message": "SQL service is running"
+            "message": "SQL agent service is running"
         }
         
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {
             "status": "unhealthy",
-            "service": "SQL LLM Service", 
+            "service": "SQL Agent Service", 
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }

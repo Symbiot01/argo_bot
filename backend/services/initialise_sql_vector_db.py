@@ -4,6 +4,7 @@ import time
 import logging
 import os
 import asyncio
+import json
 from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 from langchain_pinecone import PineconeVectorStore
@@ -11,8 +12,8 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import config
 
-class SQLSchemaProcessor:
-    """Process database schema and SQL examples for vector storage"""
+class SQLQueryProcessor:
+    """Process SQL examples for vector storage (without schema)"""
     
     def __init__(self):
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -20,88 +21,6 @@ class SQLSchemaProcessor:
             chunk_overlap=config.CHUNK_OVERLAP,
             separators=["\n\n", "\n", " ", ""]
         )
-    
-    def create_schema_documents(self, schema_info: Dict[str, Any]) -> List[Document]:
-        """Convert database schema information to LangChain documents"""
-        documents = []
-        
-        try:
-            # Process table schemas
-            if "tables" in schema_info:
-                for table_name, table_info in schema_info["tables"].items():
-                    # Create document for table structure
-                    table_content = f"""
-TABLE: {table_name}
-DESCRIPTION: {table_info.get('description', 'Database table')}
-
-COLUMNS:
-"""
-                    if "columns" in table_info:
-                        for col_name, col_info in table_info["columns"].items():
-                            table_content += f"- {col_name}: {col_info.get('type', 'unknown')} "
-                            if col_info.get('nullable', True):
-                                table_content += "(nullable) "
-                            if col_info.get('primary_key', False):
-                                table_content += "(PRIMARY KEY) "
-                            if col_info.get('foreign_key'):
-                                table_content += f"(FK -> {col_info['foreign_key']}) "
-                            table_content += f"- {col_info.get('description', '')}\n"
-                    
-                    # Add relationships
-                    if "relationships" in table_info:
-                        table_content += "\nRELATIONSHIPS:\n"
-                        for rel in table_info["relationships"]:
-                            table_content += f"- {rel}\n"
-                    
-                    # Add indexes
-                    if "indexes" in table_info:
-                        table_content += "\nINDEXES:\n"
-                        for idx in table_info["indexes"]:
-                            table_content += f"- {idx}\n"
-                    
-                    doc = Document(
-                        page_content=table_content,
-                        metadata={
-                            "type": "table_schema",
-                            "table_name": table_name,
-                            "source": "database_schema"
-                        }
-                    )
-                    documents.append(doc)
-            
-            # Process SQL query examples
-            if "query_examples" in schema_info:
-                for example in schema_info["query_examples"]:
-                    example_content = f"""
-SQL QUERY EXAMPLE:
-DESCRIPTION: {example.get('description', 'SQL query example')}
-QUERY TYPE: {example.get('type', 'SELECT')}
-
-QUERY:
-{example.get('query', '')}
-
-EXPLANATION:
-{example.get('explanation', '')}
-
-TABLES USED: {', '.join(example.get('tables', []))}
-"""
-                    doc = Document(
-                        page_content=example_content,
-                        metadata={
-                            "type": "query_example",
-                            "query_type": example.get('type', 'SELECT'),
-                            "tables": example.get('tables', []),
-                            "source": "query_examples"
-                        }
-                    )
-                    documents.append(doc)
-            
-            logging.info(f"Created {len(documents)} schema documents")
-            return documents
-            
-        except Exception as e:
-            logging.error(f"Error creating schema documents: {e}")
-            return []
     
     def load_sql_examples_from_files(self, examples_dir: str = "datasets/sql_examples") -> List[Document]:
         """Load SQL examples from files in the examples directory"""
@@ -121,7 +40,7 @@ TABLES USED: {', '.join(example.get('tables', []))}
                     doc = Document(
                         page_content=content,
                         metadata={
-                            "type": "sql_file",
+                            "type": "sql_example",
                             "filename": filename,
                             "source": "sql_examples"
                         }
@@ -134,6 +53,22 @@ TABLES USED: {', '.join(example.get('tables', []))}
         except Exception as e:
             logging.error(f"Error loading SQL examples: {e}")
             return []
+
+def load_database_schema() -> Dict[str, Any]:
+    """Load database schema from static JSON file"""
+    try:
+        schema_file = "datasets/database_schema.json"
+        if os.path.exists(schema_file):
+            with open(schema_file, 'r', encoding='utf-8') as f:
+                schema_data = json.load(f)
+            logging.info("Database schema loaded from file")
+            return schema_data
+        else:
+            logging.warning("Database schema file not found")
+            return {}
+    except Exception as e:
+        logging.error(f"Error loading database schema: {e}")
+        return {}
 
 def initialize_sql_pinecone():
     """
@@ -174,13 +109,37 @@ def initialize_sql_pinecone():
 
 def get_sql_vector_store(index, embeddings):
     """
-    Initializes the PineconeVectorStore for SQL schema retrieval.
+    Initializes the PineconeVectorStore for SQL query examples.
     """
     return PineconeVectorStore(index=index, embedding=embeddings)
 
-async def setup_sql_knowledge_base(index, embeddings, mcp_client):
+async def initialize_vector_store(embeddings):
     """
-    Sets up the SQL knowledge base with database schema and query examples.
+    Initialize the vector store for SQL query examples only.
+    
+    Args:
+        embeddings: The embeddings model
+        
+    Returns:
+        vector_store: The initialized vector store
+    """
+    try:
+        # Initialize Pinecone
+        index = initialize_sql_pinecone()
+        
+        # Get vector store
+        vector_store = get_sql_vector_store(index, embeddings)
+        
+        logging.info("Vector store initialized successfully")
+        return vector_store
+        
+    except Exception as e:
+        logging.error(f"Failed to initialize vector store: {e}")
+        raise
+
+async def setup_sql_knowledge_base(index, embeddings):
+    """
+    Sets up the SQL knowledge base with query examples only (no schema).
     """
     try:
         # Check if knowledge base is already populated
@@ -188,16 +147,8 @@ async def setup_sql_knowledge_base(index, embeddings, mcp_client):
             logging.info("SQL knowledge base already populated. Skipping setup.")
             return get_sql_vector_store(index, embeddings)
         
-        processor = SQLSchemaProcessor()
+        processor = SQLQueryProcessor()
         all_documents = []
-        
-        # Get database schema from MCP client
-        logging.info("Fetching database schema from MCP server...")
-        schema_info = await mcp_client.get_database_schema()
-        
-        if schema_info and "error" not in schema_info:
-            schema_docs = processor.create_schema_documents(schema_info)
-            all_documents.extend(schema_docs)
         
         # Load SQL examples from files
         example_docs = processor.load_sql_examples_from_files()
@@ -253,7 +204,10 @@ SQL BEST PRACTICES:
 9. Use parameterized queries to prevent SQL injection
 10. Use appropriate data types for columns
 """,
-            "metadata": {"type": "best_practices", "source": "default_patterns"}
+            "metadata": {
+                "type": "best_practices", 
+                "source": "default_patterns"
+            }
         },
         {
             "content": """
@@ -282,7 +236,10 @@ COMMON SQL PATTERNS:
    RANK() OVER (ORDER BY salary DESC) as rank 
    FROM employees;
 """,
-            "metadata": {"type": "common_patterns", "source": "default_patterns"}
+            "metadata": {
+                "type": "common_patterns", 
+                "source": "default_patterns"
+            }
         }
     ]
     
