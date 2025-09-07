@@ -9,7 +9,7 @@ import ChatInput from './ChatInput';
 import ThinkingIndicator from './ThinkingIndicator';
 import styles from './ChatInterface.module.scss';
 
-export default function ChatInterface() {
+export default function ChatInterface({ sidebarOpen }) {
   const { messages, isThinking, sendMessage } = useChat();
   const messagesEndRef = useRef(null);
 
@@ -18,8 +18,11 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Dynamic margin style
+  const marginLeft = sidebarOpen ? 300 : 48;
+
   return (
-    <div className={styles.chatWrapper}>
+    <div className={styles.chatWrapper} style={{ marginLeft }}>
       <div className={styles.messageList}>
         {messages.map((msg, index) => (
           <MessageBubble key={index} sender={msg.sender} text={msg.text} />

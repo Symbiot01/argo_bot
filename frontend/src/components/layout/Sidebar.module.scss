@@ -1,7 +1,6 @@
     // File: src/components/layout/Sidebar.module.scss
     // Description: Styles for the collapsible, translucent sidebar.
 
-
 @import "../../styles/variables";
 
 .sidebar {
@@ -14,13 +13,71 @@
   backdrop-filter: blur(12px);
   border-right: 1px solid rgba($ui-tertiary, 0.5);
   transition: transform 0.3s ease-in-out;
-  padding: 1rem;
   z-index: 10;
+  
+  // Add flex properties to structure the content
+  display: flex;
+  flex-direction: column;
+
+  // Style the title
+  h2 {
+    padding: 1.5rem;
+    font-size: 1.25rem;
+    flex-shrink: 0; // Prevents the title from shrinking
+    border-bottom: 1px solid rgba($ui-tertiary, 0.3);
+  }
 }
 
 .collapsed {
   transform: translateX(-100%);
 }
+
+// --- NEW STYLES FOR CHAT HISTORY ---
+
+.chatList {
+  flex-grow: 1; // Allows the list to fill the available vertical space
+  overflow-y: auto; // Makes the list scrollable if it gets too long
+  padding: 0.5rem 0;
+}
+
+.chatItem {
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba($ui-tertiary, 0.2);
+  transition: background-color 0.2s ease-in-out;
+
+  &:hover {
+    background-color: rgba($accent-interactive, 0.1);
+  }
+}
+
+.chatTitle {
+  font-weight: 500;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; // Adds "..." if the title is too long
+  margin-bottom: 0.25rem;
+}
+
+.chatDate {
+  font-size: 0.75rem;
+  color: $text-accent;
+  opacity: 0.8;
+}
+
+.chatPreview {
+  font-size: 0.875rem;
+  color: $text-primary;
+  opacity: 0.7;
+  margin-top: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; // Adds "..." for long previews
+}
+
+
+// --- EXISTING STYLES ---
 
 .toggleButton {
   position: absolute;
@@ -37,4 +94,4 @@
   justify-content: center;
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
-}   
+}

@@ -1,6 +1,9 @@
+
+// File: src/components/layout/Sidebar.js
+
 'use client';
 import styles from './Sidebar.module.scss';
-import { useSidebar } from '../../hooks/useSidebar';
+import { useSidebar } from '../../context/SidebarContext';
 
 export default function Sidebar() {
   const { isOpen, toggle } = useSidebar();
@@ -14,13 +17,23 @@ export default function Sidebar() {
     { id: 3, title: "Salinity Trends Discussion", date: "2024-01-13", preview: "What are the current salinity trends..." },
     { id: 4, title: "Deep Water Analysis", date: "2024-01-12", preview: "Looking at deep water formations..." },
     { id: 5, title: "Climate Change Impact", date: "2024-01-11", preview: "How is climate change affecting..." },
-    { id: 6, title: "Current Patterns Study", date: "2024-01-10", preview: "Analyze the current patterns in..." },
-    { id: 7, title: "Marine Ecosystem Query", date: "2024-01-09", preview: "Impact on marine ecosystems..." },
   ];
+
+  const handleNewChat = () => {
+    // Logic to start a new chat session would go here
+    console.log("Starting a new chat...");
+  };
 
   return (
     <aside className={sidebarClasses}>
-      <h2>Chat History</h2>
+      <div className={styles.sidebarHeader}>
+        <h2>Chat History</h2>
+        {isOpen && (
+          <button onClick={handleNewChat} className={styles.newChatButton}>
+            + New Chat
+          </button>
+        )}
+      </div>
       <div className={styles.chatList}>
         {chatHistory.map((chat) => (
           <div key={chat.id} className={styles.chatItem}>

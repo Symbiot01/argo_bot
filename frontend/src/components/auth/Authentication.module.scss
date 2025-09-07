@@ -1,0 +1,96 @@
+  // File: src/components/auth/Authentication.module.scss
+  // Description: Styles for the unified authentication component, including the active/inactive tabs.
+
+@import "../../styles/variables";
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  
+  // Translucent, blurred panel effect
+  background-color: rgba($primary-background, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba($ui-tertiary, 0.5);
+  border-radius: 16px;
+  overflow: hidden; // Keeps content within the rounded corners
+}
+
+.tabContainer {
+  display: flex;
+  background-color: rgba($ui-secondary, 0.5);
+}
+
+.tab {
+  flex: 1;
+  padding: 1rem;
+  background: transparent;
+  border: none;
+  color: $text-primary;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  border-bottom: 2px solid transparent;
+
+  &.active {
+    color: white;
+    border-bottom-color: $accent-interactive;
+  }
+}
+
+.formContainer {
+  padding: 2.5rem 2rem;
+}
+
+.title {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin-bottom: 2rem;
+  color: $text-primary;
+}
+
+.inputGroup {
+  margin-bottom: 1.5rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: $text-accent;
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: $ui-secondary;
+  border: 1px solid $ui-tertiary;
+  border-radius: 8px;
+  color: $text-primary;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: $accent-interactive;
+  }
+}
+
+.submitButton {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: $accent-interactive;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}

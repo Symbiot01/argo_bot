@@ -1,4 +1,4 @@
-// File: src/app/(main)/page.js
+// File: src/app/page.js
 // Description: The main page of the application, which simply renders the complete chat interface.
 
 
