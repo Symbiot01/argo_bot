@@ -16,8 +16,8 @@ export default function DynamicBackground() {
 
     // Define projection centered on the Indian Ocean
     const projection = d3.geoMercator()
-      .center([80, 5]) // Longitude, Latitude for Indian Ocean
-      .scale(width / 4) // Adjust scale based on width
+      .center([70, 5]) // Longitude, Latitude for Indian Ocean
+      .scale(width /1.5) // Adjust scale based on width
       .translate([width / 2, height / 2]);
 
     const pathGenerator = d3.geoPath().projection(projection);

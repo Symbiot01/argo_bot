@@ -1,6 +1,101 @@
     // File: src/components/layout/Sidebar.module.scss
     // Description: Styles for the collapsible, translucent sidebar.
 
+// @import "../../styles/variables";
+
+// .sidebar {
+//   height: 100vh;
+//   width: 300px;
+//   position: absolute;
+//   top: 0;
+//   left: 0;
+//   background-color: rgba($primary-background, 0.6);
+//   backdrop-filter: blur(12px);
+//   border-right: 1px solid rgba($ui-tertiary, 0.5);
+//   transition: transform 0.3s ease-in-out;
+//   z-index: 10;
+  
+//   // Add flex properties to structure the content
+//   display: flex;
+//   flex-direction: column;
+
+//   // Style the title
+//   h2 {
+//     padding: 1.5rem;
+//     font-size: 1.25rem;
+//     flex-shrink: 0; // Prevents the title from shrinking
+//     border-bottom: 1px solid rgba($ui-tertiary, 0.3);
+//   }
+// }
+
+// .collapsed {
+//   transform: translateX(-100%);
+// }
+
+// // --- NEW STYLES FOR CHAT HISTORY ---
+
+// .chatList {
+//   flex-grow: 1; // Allows the list to fill the available vertical space
+//   overflow-y: auto; // Makes the list scrollable if it gets too long
+//   padding: 0.5rem 0;
+// }
+
+// .chatItem {
+//   padding: 1rem 1.5rem;
+//   cursor: pointer;
+//   border-bottom: 1px solid rgba($ui-tertiary, 0.2);
+//   transition: background-color 0.2s ease-in-out;
+
+//   &:hover {
+//     background-color: rgba($accent-interactive, 0.1);
+//   }
+// }
+
+// .chatTitle {
+//   font-weight: 500;
+//   color: $text-primary;
+//   white-space: nowrap;
+//   overflow: hidden;
+//   text-overflow: ellipsis; // Adds "..." if the title is too long
+//   margin-bottom: 0.25rem;
+// }
+
+// .chatDate {
+//   font-size: 0.75rem;
+//   color: $text-accent;
+//   opacity: 0.8;
+// }
+
+// .chatPreview {
+//   font-size: 0.875rem;
+//   color: $text-primary;
+//   opacity: 0.7;
+//   margin-top: 0.5rem;
+//   white-space: nowrap;
+//   overflow: hidden;
+//   text-overflow: ellipsis; // Adds "..." for long previews
+// }
+
+
+// // --- EXISTING STYLES ---
+
+// .toggleButton {
+//   position: absolute;
+//   top: 1rem;
+//   right: -40px;
+//   width: 40px;
+//   height: 40px;
+//   background-color: $accent-interactive;
+//   border: none;
+//   color: white;
+//   cursor: pointer;
+//   display: flex;
+//   align-items: center;
+//   justify-content: center;
+//   border-top-right-radius: 8px;
+//   border-bottom-right-radius: 8px;
+// }
+
 @import "../../styles/variables";
 
 .sidebar {
@@ -11,43 +106,99 @@
   left: 0;
   background-color: rgba($primary-background, 0.6);
   backdrop-filter: blur(12px);
-  border-right: 1px solid rgba($ui-tertiary, 0.5);
+  border-right: 1px solid rgba($ui-tertiary, 0.4);
   transition: transform 0.3s ease-in-out;
   z-index: 10;
-  
-  // Add flex properties to structure the content
   display: flex;
   flex-direction: column;
-
-  // Style the title
-  h2 {
-    padding: 1.5rem;
-    font-size: 1.25rem;
-    flex-shrink: 0; // Prevents the title from shrinking
-    border-bottom: 1px solid rgba($ui-tertiary, 0.3);
-  }
 }
 
 .collapsed {
   transform: translateX(-100%);
 }
 
-// --- NEW STYLES FOR CHAT HISTORY ---
+.sidebarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba($ui-tertiary, 0.4);
+  
+  h2 {
+    font-size: 1.125rem;
+    font-weight: 500;
+  }
+}
+
+.newChatButton {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: 1px solid rgba($accent-interactive, 0.5);
+  color: $text-accent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  transition: background-color 0.2s, color 0.2s;
+
+  &:hover {
+    background-color: rgba($accent-interactive, 0.2);
+    color: white;
+  }
+}
 
 .chatList {
-  flex-grow: 1; // Allows the list to fill the available vertical space
-  overflow-y: auto; // Makes the list scrollable if it gets too long
+  flex-grow: 1;
+  overflow-y: auto;
   padding: 0.5rem 0;
+
+  // --- Custom Scrollbar for a professional look ---
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba($ui-tertiary, 0.5);
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: rgba($accent-interactive, 0.6);
+  }
 }
 
 .chatItem {
   padding: 1rem 1.5rem;
   cursor: pointer;
   border-bottom: 1px solid rgba($ui-tertiary, 0.2);
-  transition: background-color 0.2s ease-in-out;
+  position: relative; // Needed for the ::before pseudo-element
+
+  // --- Active/Hover Indicator Bar ---
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: $accent-interactive;
+    transform: scaleY(0);
+    transition: transform 0.2s ease-in-out;
+  }
 
   &:hover {
     background-color: rgba($accent-interactive, 0.1);
+  }
+
+  // Style for the active chat item
+  &.active {
+    background-color: rgba($accent-interactive, 0.15);
+    &::before {
+      transform: scaleY(1);
+    }
   }
 }
 
@@ -56,7 +207,7 @@
   color: $text-primary;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; // Adds "..." if the title is too long
+  text-overflow: ellipsis;
   margin-bottom: 0.25rem;
 }
 
@@ -73,11 +224,8 @@
   margin-top: 0.5rem;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; // Adds "..." for long previews
+  text-overflow: ellipsis;
 }
-
-
-// --- EXISTING STYLES ---
 
 .toggleButton {
   position: absolute;

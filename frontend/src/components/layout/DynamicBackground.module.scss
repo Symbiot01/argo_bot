@@ -12,11 +12,12 @@
   height: 100%;
   z-index: -1;
   background-color: $primary-background;
+  overflow: hidden; // Hide gradients when they move off-screen
 }
 
 .grid {
   fill: none;
-  stroke: rgba(51, 65, 85, 0.2); // slate-700 with opacity
+  stroke: rgba(51, 65, 85, 0.2);
   stroke-width: 0.5px;
 }
 
@@ -25,18 +26,46 @@
   stroke: $text-accent;
   stroke-width: 0.5px;
   opacity: 0.5;
-  filter: drop-shadow(0 0 5px $text-accent); // Glowing effect
+  filter: drop-shadow(0 0 5px $text-accent);
 }
 
 .sonarGradient {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(14, 165, 233, 0.1) 0%, rgba(14, 165, 233, 0) 60%);
-  animation: pulse 10s infinite ease-in-out;
+  // The pulse animation remains
+  animation-name: pulse;
+  animation-duration: 10s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
 }
+
+// Apply the first movement animation
+.gradient1 {
+  animation: pulse 10s infinite ease-in-out, move1 25s infinite linear alternate;
+}
+
+// Apply the second movement animation
+.gradient2 {
+  animation: pulse 10s infinite ease-in-out, move2 30s infinite linear alternate;
+}
+
+// --- NEW ANIMATIONS ---
 
 @keyframes pulse {
   0% { transform: scale(0.8); opacity: 0; }
   50% { opacity: 1; }
   100% { transform: scale(1.5); opacity: 0; }
+}
+
+// Keyframes for the first gradient's movement
+@keyframes move1 {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-10vw, 15vh); }
+}
+
+// Keyframes for the second gradient's movement
+@keyframes move2 {
+  from { transform: translate(0, 0); }
+  to { transform: translate(15vw, -10vh); }
 }
