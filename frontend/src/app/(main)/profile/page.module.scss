@@ -1,0 +1,17 @@
+// File: src/app/(main)/profile/page.module.scss
+
+.container {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.pageTitle {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  align-self: flex-start;
+  max-width: 700px;
+  width: 100%;
+}

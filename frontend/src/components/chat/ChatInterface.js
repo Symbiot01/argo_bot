@@ -7,6 +7,7 @@ import { useChat } from '../../hooks/useChat';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import ThinkingIndicator from './ThinkingIndicator';
+import WelcomeScreen from './WelcomeScreen'; // Import the new component
 import styles from './ChatInterface.module.scss';
 
 export default function ChatInterface({ sidebarOpen }) {
@@ -21,14 +22,26 @@ export default function ChatInterface({ sidebarOpen }) {
   // Dynamic margin style
   const marginLeft = sidebarOpen ? 300 : 48;
 
+  const handleSuggestionClick = (query) => {
+    sendMessage(query);
+  };
+
   return (
     <div className={styles.chatWrapper} style={{ marginLeft }}>
       <div className={styles.messageList}>
-        {messages.map((msg, index) => (
-          <MessageBubble key={index} sender={msg.sender} text={msg.text} />
-        ))}
-        {isThinking && <ThinkingIndicator />}
-        <div ref={messagesEndRef} />
+        {/* If there's only the initial AI message, show the WelcomeScreen */}
+        {messages.length <= 1 ? (
+          <WelcomeScreen onSuggestionClick={handleSuggestionClick} />
+        ) : (
+          <>
+            {/* Otherwise, show the conversation */}
+            {messages.map((msg, index) => (
+              <MessageBubble key={index} sender={msg.sender} text={msg.text} />
+            ))}
+            {isThinking && <ThinkingIndicator />}
+            <div ref={messagesEndRef} />
+          </>
+        )}
       </div>
       <ChatInput onSend={sendMessage} disabled={isThinking} />
     </div>

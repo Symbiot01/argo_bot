@@ -1,0 +1,107 @@
+// File: src/components/profile/ProfileSettings.module.scss
+
+@import "../../styles/_variables";
+
+.settingsWrapper {
+  width: 100%;
+  max-width: 700px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.card {
+  background-color: $ui-secondary;
+  border: 1px solid $ui-tertiary;
+  border-radius: 12px;
+  padding: 1.5rem;
+
+  h2 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: $text-primary;
+  }
+}
+
+.profilePictureSection {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.uploadButton, .saveButton, .logoutButton {
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.uploadButton {
+  background-color: $ui-tertiary;
+  color: $text-secondary;
+  &:hover { background-color: lighten($ui-tertiary, 5%); }
+}
+
+.saveButton {
+  background-color: $accent-interactive;
+  color: white;
+  margin-top: 1rem;
+  &:hover { background-color: lighten($accent-interactive, 10%); }
+}
+
+.logoutButton {
+  background-color: darken($ui-secondary, 5%);
+  color: $text-primary;
+  border: 1px solid $ui-tertiary;
+  &:hover { background-color: $ui-tertiary; }
+}
+
+.inputGroup {
+  margin-bottom: 1rem;
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: $text-secondary;
+    font-size: 0.9rem;
+  }
+  input {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: $primary-background;
+    border: 1px solid $ui-tertiary;
+    border-radius: 8px;
+    color: $text-primary;
+    font-size: 1rem;
+    &:disabled {
+      background-color: $ui-tertiary;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.dangerZone {
+  border-color: $accent-danger;
+  p {
+    color: $text-secondary;
+    margin-bottom: 1rem;
+  }
+  .deleteButton {
+    background-color: $accent-danger;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    cursor: pointer;
+    &:hover { background-color: lighten($accent-danger, 10%); }
+  }
+}

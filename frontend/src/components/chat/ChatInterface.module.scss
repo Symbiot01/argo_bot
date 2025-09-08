@@ -1,15 +1,18 @@
+// File: src/components/chat/ChatInterface.module.scss
+// Description: Styles for the main chat container and message list.
+
 .chatWrapper {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  transition: margin-left 0.3s ease-in-out; // Smooth transition for sidebar
 }
 
 .messageList {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1rem 2rem; /* Added more horizontal padding */
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items:flex-end;
-}   
+  gap: 0.5rem; /* Add a gap between bubbles */
+}

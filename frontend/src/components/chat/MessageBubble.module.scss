@@ -1,30 +1,26 @@
 // File: src/components/chat/MessageBubble.module.scss
 // Description: Styles for the chat messages, distinguishing between the user and the AI.
 
-
 @import "../../styles/variables";
 
 .bubble {
   max-width: 75%;
   padding: 0.75rem 1rem;
   border-radius: 12px;
-  margin-bottom: 0.5rem;
   line-height: 1.5;
-  text-align: center;
-
- 
-  
+  text-align: left; /* Changed from center to left */
+  width: fit-content; /* Ensure bubble is only as wide as its content */
 }
 
 .user {
   background-color: $accent-interactive;
   color: white;
-  align-self: flex-end;
+  align-self: flex-end; /* Aligns to the right */
   border-bottom-right-radius: 4px;
 }
 
 .ai {
   background-color: $ui-secondary;
-  align-self: center;
+  align-self: flex-start; /* Aligns to the left */
   border-bottom-left-radius: 4px;
 }
