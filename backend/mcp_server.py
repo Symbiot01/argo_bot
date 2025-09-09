@@ -476,4 +476,11 @@ async def main():
     await server.run()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        loop = asyncio.get_running_loop()
+        # If we get here, there's already a running loop
+        # Create a task to run main
+        asyncio.create_task(main())
+    except RuntimeError:
+        # No running loop, safe to use asyncio.run()
+        asyncio.run(main())

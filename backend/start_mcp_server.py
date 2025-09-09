@@ -47,4 +47,4 @@ if __name__ == "__main__":
     os.environ.setdefault("PYTHONPATH", str(current_dir))
     
     # Run the server
-    asyncio.run(main())
+    main()
