@@ -4,26 +4,28 @@ import logging
 import json
 import asyncio
 import os
+import sys  # Import sys
 from typing import AsyncGenerator, Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
+import PyPDF2
 
 import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.prompts import PromptTemplate
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough,RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 import config
 
 # Import utility functions
-from services.initialise_sql_vector_db import load_database_schema
 from utility_functions.chat_history import get_chat_history, format_chat_history_for_context
+from contextlib import AsyncExitStack
 
 # MCP Client imports
 import mcp
 from mcp.client.session import ClientSession
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import stdio_client,StdioServerParameters
 
 class SQLMCPClient:
     """MCP Client for SQL query execution and database operations"""
@@ -31,32 +33,41 @@ class SQLMCPClient:
     def __init__(self, server_script_path: str = "mcp_server.py"):
         self.server_script_path = server_script_path
         self.session = None
-        self.client = None
-        
+        self._client_context = None  # To hold the context manager
+        self.args = [server_script_path]
+        self.exit_stack = AsyncExitStack()
+
     async def connect(self):
         """Connect to the MCP server"""
+        if self.session:
+            logging.warning("Already connected.")
+            return True
         try:
-            # Start the MCP server process
-            server_params = mcp.ClientParameters(
-                name="sql-client",
-                version="1.0.0"
-            )
-            
-            # Create stdio client connection
-            self.client = stdio_client(
-                command=["python", self.server_script_path],
+
+                
+            server_params = StdioServerParameters(
+                command="python",
+                args=self.args,
                 env=None
             )
-            
-            # Start session
-            self.session = await self.client.__aenter__()
+
+
+            # Start the server
+            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+            self.stdio, self.writer = stdio_transport
+            self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.writer))
+
+
             await self.session.initialize()
-            
+
             logging.info("Connected to MCP SQL server successfully")
             return True
             
         except Exception as e:
             logging.error(f"Failed to connect to MCP server: {e}")
+            logging.exception(e)
+            self._client_context = None
+            self.session = None
             return False
     
     async def execute_sql_query(self, query: str, database_name: str = None) -> Dict[str, Any]:
@@ -117,19 +128,88 @@ class SQLMCPClient:
     
     async def disconnect(self):
         """Disconnect from MCP server"""
+        if not self._client_context:
+            logging.warning("Not connected.")
+            return
         try:
-            if self.client:
-                await self.client.__aexit__(None, None, None)
+            # Manually exit the context to terminate the server process.
+            await self._client_context.__aexit__(None, None, None)
             logging.info("Disconnected from MCP server")
         except Exception as e:
             logging.error(f"Error disconnecting from MCP server: {e}")
+        finally:
+            # Clear the state
+            self._client_context = None
+            self.session = None
 
-def initialize_sql_llm_and_embeddings():
+def load_database_schema() -> Dict[str, Any]:
+    """Load database schema from static JSON file"""
+    try:
+        schema_file = "datasets/database_schema.json"
+        if os.path.exists(schema_file):
+            with open(schema_file, 'r', encoding='utf-8') as f:
+                schema_data = json.load(f)
+            logging.info("Database schema loaded from file")
+            return schema_data
+        else:
+            logging.warning("Database schema file not found")
+            return {}
+    except Exception as e:
+        logging.error(f"Error loading database schema: {e}")
+        return {}
+
+def load_pdf_content(pdf_path: str = "datasets/argo_context.pdf") -> str:
+    """Load and extract text content from PDF file"""
+    try:
+        if not os.path.exists(pdf_path):
+            logging.warning(f"PDF file not found: {pdf_path}")
+            return ""
+        
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            text_content = ""
+            
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text_content += page.extract_text() + "\n"
+            
+            logging.info(f"PDF content loaded successfully from {pdf_path}")
+            return text_content.strip()
+            
+    except Exception as e:
+        logging.error(f"Error loading PDF content: {e}")
+        return ""
+
+def load_sql_examples() -> str:
+    """Load SQL examples from files in the examples directory"""
+    examples_content = ""
+    examples_dir = "datasets/sql_examples"
+    
+    try:
+        if not os.path.exists(examples_dir):
+            logging.info(f"SQL examples directory {examples_dir} not found")
+            return ""
+        
+        for filename in os.listdir(examples_dir):
+            if filename.endswith('.sql') or filename.endswith('.txt'):
+                filepath = os.path.join(examples_dir, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    examples_content += f"\n--- {filename} ---\n{content}\n"
+        
+        logging.info(f"SQL examples loaded from {examples_dir}")
+        return examples_content
+        
+    except Exception as e:
+        logging.error(f"Error loading SQL examples: {e}")
+        return ""
+
+def initialize_sql_llm():
     """
-    Initializes the Google Generative AI models for SQL query generation.
+    Initializes the Google Generative AI model for SQL query generation.
     
     Returns:
-        tuple: (llm_instance, embeddings_model_instance, mcp_client)
+        tuple: (llm_instance, mcp_client)
     """
     try:
         # Configure Google API
@@ -146,42 +226,41 @@ def initialize_sql_llm_and_embeddings():
             max_tokens=2048
         )
         
-        embeddings_model = GoogleGenerativeAIEmbeddings(model=config.EMBEDDING_MODEL)
-        
         # Initialize MCP client
         mcp_client = SQLMCPClient()
         
-        logging.info("SQL LLM, Embedding models, and MCP client initialized successfully.")
-        return llm, embeddings_model, mcp_client
+        logging.info("SQL LLM and MCP client initialized successfully.")
+        return llm, mcp_client
         
     except Exception as e:
         logging.error(f"Failed to initialize SQL AI models: {e}")
         raise
 
-def create_sql_rag_chain(llm, vector_store, chat_id: Optional[int] = None):
+# Legacy function for backward compatibility
+def initialize_sql_llm_and_embeddings():
+    """
+    Legacy wrapper for initialize_sql_llm.
+    
+    Returns:
+        tuple: (llm_instance, None, mcp_client) - embeddings set to None as we no longer use them
+    """
+    llm, mcp_client = initialize_sql_llm()
+    return llm, None, mcp_client
+
+def create_sql_rag_chain(llm, chat_id: Optional[int] = None):
     """
     Creates a RAG chain for SQL query generation that returns JSON responses with either SQL queries or HTML content.
-    Uses static schema file and includes chat history context.
+    Uses static schema file, SQL examples, and PDF context instead of vector database.
     
     Args:
         llm: The initialized language model.
-        vector_store: Vector store containing SQL query examples.
         chat_id: Optional chat ID for including conversation history.
     
     Returns:
         A runnable LangChain object for SQL response generation.
     """
-    logging.info("Creating SQL RAG chain with static schema...")
+    logging.info("Creating SQL RAG chain with static context...")
 
-    # Query examples retriever
-    query_retriever = vector_store.as_retriever(
-        search_type=config.RETRIEVER_SEARCH_TYPE,
-        search_kwargs=config.RETRIEVER_SEARCH_KWARGS
-    )
-
-    def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs)
-    
     def format_schema_info(schema_data: Dict[str, Any]) -> str:
         """Format schema data into readable string"""
         if not schema_data:
@@ -216,17 +295,19 @@ def create_sql_rag_chain(llm, vector_store, chat_id: Optional[int] = None):
         
         return schema_text
     
-    def create_context_with_chat_history(inputs):
-        """Retrieve query examples and prepare context with chat history"""
+    def create_context_with_static_data(inputs):
+        """Prepare context with static data instead of vector search"""
         question = inputs["question"]
         
-        # Get relevant query examples
-        query_examples = query_retriever.get_relevant_documents(question)
-        examples_context = format_docs(query_examples)
-        
-        # Load static schema
+        # Load static data
         schema_data = load_database_schema()
         schema_context = format_schema_info(schema_data)
+        
+        # Load SQL examples
+        sql_examples = load_sql_examples()
+        
+        # Load PDF content
+        pdf_content = load_pdf_content()
         
         # Get chat history if chat_id is provided
         chat_context = ""
@@ -236,8 +317,9 @@ def create_sql_rag_chain(llm, vector_store, chat_id: Optional[int] = None):
         
         return {
             "question": question,
-            "query_examples": examples_context,
+            "sql_examples": sql_examples,
             "schema_info": schema_context,
+            "pdf_content": pdf_content,
             "chat_history": chat_context
         }
 
@@ -246,8 +328,11 @@ def create_sql_rag_chain(llm, vector_store, chat_id: Optional[int] = None):
 DATABASE SCHEMA INFORMATION:
 {schema_info}
 
-RELEVANT SQL QUERY EXAMPLES:
-{query_examples}
+SQL QUERY EXAMPLES:
+{sql_examples}
+
+ARGO CONTEXT INFORMATION:
+{pdf_content}
 
 {chat_history_section}
 
@@ -265,6 +350,8 @@ For INFORMATIONAL QUERIES (general help/explanations):
 - Questions about concepts, definitions, or how things work
 - General help or guidance requests
 - Non-data related questions
+
+Use the Argo context information to provide relevant insights and context when answering questions.
 
 RESPONSE FORMAT:
 Return a valid JSON object with this exact structure:
@@ -286,13 +373,13 @@ REQUIREMENTS:
 - For SQL: Generate syntactically correct PostgreSQL queries using the schema information
 - For HTML: Create well-formatted HTML with proper tags (h1, h2, p, ul, li, strong, etc.)
 - Use the schema information to ensure correct table and column names
-- Consider the conversation history when generating responses
+- Consider the conversation history and Argo context when generating responses
 - Ensure JSON is valid and properly escaped
 
 JSON RESPONSE:"""
     
     def format_prompt_with_context(inputs):
-        """Format the prompt with schema and chat history"""
+        """Format the prompt with schema, SQL examples, PDF content, and chat history"""
         chat_history_section = ""
         if inputs.get("chat_history") and inputs["chat_history"] != "No previous conversation history available.":
             chat_history_section = f"""
@@ -304,15 +391,16 @@ CONVERSATION CONTEXT:
         
         return sql_template.format(
             schema_info=inputs["schema_info"],
-            query_examples=inputs["query_examples"],
+            sql_examples=inputs["sql_examples"],
+            pdf_content=inputs["pdf_content"],
             chat_history_section=chat_history_section,
             question=inputs["question"]
         )
     
-    # SQL RAG chain with static schema and chat history
+    # SQL RAG chain with static data and chat history
     sql_rag_chain = (
-        create_context_with_chat_history
-        | format_prompt_with_context
+        RunnableLambda(create_context_with_static_data)
+        | RunnableLambda(format_prompt_with_context)
         | llm
         | StrOutputParser()
     )
@@ -321,12 +409,12 @@ CONVERSATION CONTEXT:
     return sql_rag_chain
 
 # Legacy function name for backward compatibility
-def create_unified_rag_chain(llm, vector_store, schema_retriever=None, chat_id: Optional[int] = None):
+def create_unified_rag_chain(llm, vector_store=None, schema_retriever=None, chat_id: Optional[int] = None):
     """Legacy wrapper for create_sql_rag_chain"""
-    return create_sql_rag_chain(llm, vector_store, chat_id)
+    return create_sql_rag_chain(llm, chat_id)
 
 async def execute_sql_with_context(sql_chain, mcp_client, question: str, 
-                                 database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
+                                   database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Execute SQL query processing pipeline that handles both SQL and HTML responses.
     
@@ -428,12 +516,12 @@ async def execute_sql_with_context(sql_chain, mcp_client, question: str,
 
 # Legacy function name for backward compatibility
 async def execute_unified_query(unified_chain, mcp_client, question: str, 
-                               database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
+                                  database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
     """Legacy wrapper for execute_sql_with_context"""
     return await execute_sql_with_context(unified_chain, mcp_client, question, database_name, chat_id)
 
 async def astream_unified_response(unified_chain, mcp_client, question: str, 
-                                  database_name: str = None) -> AsyncGenerator[str, None]:
+                                   database_name: str = None) -> AsyncGenerator[str, None]:
     """
     Stream unified response generation that handles both SQL and HTML responses.
     
@@ -458,7 +546,7 @@ async def astream_unified_response(unified_chain, mcp_client, question: str,
             response_text += chunk
             yield chunk
         
-        yield "\n\n� Processing response...\n"
+        yield "\n\n Processing response...\n"
         
         # Clean up the response
         response_text = response_text.strip()
@@ -505,7 +593,7 @@ async def astream_unified_response(unified_chain, mcp_client, question: str,
         yield f"Error in unified pipeline: {str(e)}\n"
 
 async def astream_sql_response(sql_chain, mcp_client, question: str, 
-                              database_name: str = None, chat_id: Optional[int] = None) -> AsyncGenerator[str, None]:
+                                 database_name: str = None, chat_id: Optional[int] = None) -> AsyncGenerator[str, None]:
     """
     Stream SQL response generation that handles both SQL and HTML responses.
     

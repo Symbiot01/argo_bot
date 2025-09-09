@@ -12,7 +12,6 @@ from services.initialise_sql_llm import (
     execute_sql_with_context,
     astream_sql_response
 )
-from services.initialise_sql_vector_db import initialize_vector_store
 import config
 
 class SQLAgent:
@@ -22,7 +21,6 @@ class SQLAgent:
         self.llm = None
         self.embeddings = None
         self.mcp_client = None
-        self.vector_store = None
         self.sql_chain = None
         self.is_initialized = False
         
@@ -40,11 +38,8 @@ class SQLAgent:
             # Connect to MCP server
             await self.mcp_client.connect()
             
-            # Initialize vector store (without schema retriever)
-            self.vector_store = await initialize_vector_store(self.embeddings)
-            
-            # Create SQL RAG chain without schema retriever
-            self.sql_chain = create_sql_rag_chain(self.llm, self.vector_store)
+            # Create SQL RAG chain (no vector store needed)
+            self.sql_chain = create_sql_rag_chain(self.llm)
             
             self.is_initialized = True
             logging.info("SQL Agent initialized successfully")
@@ -72,7 +67,7 @@ class SQLAgent:
             
             # Create SQL chain with chat context if provided
             if chat_id:
-                sql_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+                sql_chain = create_sql_rag_chain(self.llm, chat_id)
             else:
                 sql_chain = self.sql_chain
             
@@ -89,6 +84,7 @@ class SQLAgent:
             
         except Exception as e:
             logging.error(f"Error processing query in SQL Agent: {e}")
+            logging.exception(e)
             return {
                 "question": question,
                 "error": str(e),
@@ -115,7 +111,7 @@ class SQLAgent:
             
             # Create SQL chain with chat context if provided
             if chat_id:
-                sql_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+                sql_chain = create_sql_rag_chain(self.llm, chat_id)
             else:
                 sql_chain = self.sql_chain
             

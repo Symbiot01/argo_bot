@@ -15,7 +15,7 @@ from mcp.types import (
     Tool, 
     TextContent,
     CallToolRequest,
-    GetResourceRequest
+  
 )
 
 import psycopg2
@@ -23,6 +23,9 @@ from psycopg2.extras import RealDictCursor
 import sqlite3
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
+
+# Import database configuration from local config
+from config import DATABASE_URL, USER_DATABASE_URL
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -61,10 +64,18 @@ class SQLMCPServer:
                     return {"error": f"Failed to connect to database '{database_name}'"}
                 
                 # Execute query based on database type
-                if database_name.startswith("postgres") or "postgresql" in database_name.lower():
+                if database_name in ["default", "postgres", "database1", "main"]:
+                    # PostgreSQL database
                     result = await self.execute_postgres_query(connection, query)
-                else:
+                elif database_name in ["user_db", "database2", "users"]:
+                    # SQLite database
                     result = await self.execute_generic_query(connection, query)
+                else:
+                    # Try to detect database type from connection string
+                    if "postgresql" in str(connection.url).lower():
+                        result = await self.execute_postgres_query(connection, query)
+                    else:
+                        result = await self.execute_generic_query(connection, query)
                 
                 # Save results to CSV
                 if result.get("data") and len(result["data"]) > 0:
@@ -152,9 +163,29 @@ class SQLMCPServer:
     def setup_resources(self):
         """Setup MCP resources"""
         
-        @self.server.resource()
+        @self.server.resource("database://config")
         async def database_config() -> Resource:
             """Database configuration resource"""
+            config_data = {
+                "databases": {
+                    "database1": {
+                        "type": "postgresql",
+                        "url": DATABASE_URL,
+                        "description": "Main PostgreSQL database for predefined structure and data"
+                    },
+                    "database2": {
+                        "type": "sqlite",
+                        "url": USER_DATABASE_URL,
+                        "description": "SQLite database for user data, chat, and messages"
+                    }
+                },
+                "default_database": "database1",
+                "available_aliases": {
+                    "database1": ["default", "postgres", "main"],
+                    "database2": ["user_db", "users"]
+                }
+            }
+            
             return Resource(
                 uri="database://config",
                 name="Database Configuration",
@@ -162,29 +193,38 @@ class SQLMCPServer:
                 mimeType="application/json"
             )
     
+    async def initialize_connections(self):
+        """Initialize database connections at startup"""
+        try:
+            # Initialize PostgreSQL connection (database1)
+            await self.get_database_connection("database1")
+            # Initialize SQLite connection (database2)
+            await self.get_database_connection("database2")
+            logger.info("Database connections initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing database connections: {e}")
+    
     async def get_database_connection(self, database_name: str):
         """Get or create database connection"""
         try:
             if database_name in self.database_connections:
                 return self.database_connections[database_name]
             
-            # Load database configuration
-            db_config = await self.load_database_config(database_name)
-            if not db_config:
-                logger.error(f"No configuration found for database '{database_name}'")
-                return None
-            
-            # Create connection based on database type
-            if db_config["type"] == "postgresql":
-                engine = create_engine(db_config["url"])
+            # Map database names to actual database URLs
+            if database_name in ["default", "postgres", "database1", "main"]:
+                # Use the main PostgreSQL database (database1)
+                engine = create_engine(DATABASE_URL)
                 self.database_connections[database_name] = engine
+                logger.info(f"Connected to PostgreSQL database: {database_name}")
                 return engine
-            elif db_config["type"] == "sqlite":
-                engine = create_engine(db_config["url"])
+            elif database_name in ["user_db", "database2", "users"]:
+                # Use the user SQLite database (database2)
+                engine = create_engine(USER_DATABASE_URL)
                 self.database_connections[database_name] = engine
+                logger.info(f"Connected to SQLite database: {database_name}")
                 return engine
             else:
-                logger.error(f"Unsupported database type: {db_config['type']}")
+                logger.error(f"Unknown database name: {database_name}")
                 return None
                 
         except Exception as e:
@@ -194,25 +234,27 @@ class SQLMCPServer:
     async def load_database_config(self, database_name: str) -> Dict[str, Any]:
         """Load database configuration from config file or environment"""
         try:
-            # Try to load from mcp_config.json
+            # Return configuration based on database name
+            if database_name in ["default", "postgres", "database1", "main"]:
+                return {
+                    "type": "postgresql",
+                    "url": DATABASE_URL,
+                    "name": "PostgreSQL Database (database1)"
+                }
+            elif database_name in ["user_db", "database2", "users"]:
+                return {
+                    "type": "sqlite",
+                    "url": USER_DATABASE_URL,
+                    "name": "SQLite User Database (database2)"
+                }
+            
+            # Try to load from mcp_config.json as fallback
             config_path = "mcp_config.json"
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:
                     config = json.load(f)
                     if "databases" in config and database_name in config["databases"]:
                         return config["databases"][database_name]
-            
-            # Fallback to environment variables
-            if database_name == "default" or database_name == "postgres":
-                return {
-                    "type": "postgresql",
-                    "url": os.getenv("DATABASE_URL", "postgresql://postgres_buoy:buoy_sih123@localhost:5432/database")
-                }
-            elif database_name == "user_db" or database_name == "sqlite":
-                return {
-                    "type": "sqlite",
-                    "url": os.getenv("USER_DATABASE_URL", "sqlite:///./user_data.db")
-                }
             
             return None
             
@@ -424,6 +466,8 @@ class SQLMCPServer:
     async def run(self):
         """Run the MCP server"""
         logger.info("Starting SQL MCP Server...")
+        # Initialize database connections
+        await self.initialize_connections()
         await self.server.run()
 
 # Main execution

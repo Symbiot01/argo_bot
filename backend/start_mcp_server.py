@@ -39,6 +39,7 @@ async def main():
         logger.info("Server stopped by user")
     except Exception as e:
         logger.error(f"Server error: {e}")
+        logger.exception(e)
         sys.exit(1)
 
 if __name__ == "__main__":

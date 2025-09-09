@@ -13,11 +13,6 @@ from services.initialise_sql_llm import (
     execute_sql_with_context,
     astream_sql_response
 )
-from services.initialise_sql_vector_db import (
-    initialize_sql_pinecone,
-    setup_sql_knowledge_base,
-    get_sql_vector_store
-)
 
 class SQLLLMService:
     """Service class for SQL LLM operations with MCP client integration"""
@@ -26,7 +21,6 @@ class SQLLLMService:
         self.llm = None
         self.embeddings = None
         self.mcp_client = None
-        self.vector_store = None
         self.rag_chain = None
         self.initialized = False
     
@@ -43,20 +37,8 @@ class SQLLLMService:
             if not connection_success:
                 raise Exception("Failed to connect to MCP server")
             
-            # Initialize Pinecone for SQL knowledge base
-            pinecone_index = initialize_sql_pinecone()
-            
-            # Setup SQL knowledge base without database schema
-            self.vector_store = await setup_sql_knowledge_base(
-                pinecone_index, 
-                self.embeddings
-            )
-            
-            # Create RAG chain for SQL generation (without schema retriever)
-            self.rag_chain = create_sql_rag_chain(
-                self.llm, 
-                self.vector_store
-            )
+            # Create RAG chain for SQL generation (no vector store needed)
+            self.rag_chain = create_sql_rag_chain(self.llm)
             
             self.initialized = True
             logging.info("SQL LLM service initialized successfully")
@@ -83,7 +65,7 @@ class SQLLLMService:
         try:
             # Create RAG chain with chat context if provided
             if chat_id:
-                rag_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+                rag_chain = create_sql_rag_chain(self.llm, chat_id)
             else:
                 rag_chain = self.rag_chain
             
@@ -123,7 +105,7 @@ class SQLLLMService:
         
         # Create RAG chain with chat context if provided
         if chat_id:
-            rag_chain = create_sql_rag_chain(self.llm, self.vector_store, chat_id)
+            rag_chain = create_sql_rag_chain(self.llm, chat_id)
         else:
             rag_chain = self.rag_chain
         

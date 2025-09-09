@@ -1,198 +1,155 @@
 {
-  "database_name": "main_database",
-  "description": "Main application database containing user, chat, and message data",
+  "database_name": "postgres",
+  "description": "Database for storing and analyzing Argo oceanographic data, including float metadata, ocean profiles, and physical/biogeochemical measurements.",
   "tables": {
-    "users": {
-      "description": "User account information and authentication data",
+    "floats": {
+      "description": "Stores static metadata about each individual Argo float platform.",
       "columns": {
-        "id": {
+        "float_id": {
           "type": "INTEGER",
           "nullable": false,
           "primary_key": true,
-          "description": "Unique user identifier"
+          "description": "Unique identifier for each Argo float."
         },
-        "username": {
-          "type": "VARCHAR(50)",
-          "nullable": false,
-          "unique": true,
-          "description": "Unique username for login"
-        },
-        "email": {
-          "type": "VARCHAR(100)",
-          "nullable": false,
-          "unique": true,
-          "description": "User email address"
-        },
-        "password_hash": {
+        "model": {
           "type": "VARCHAR(255)",
+          "nullable": true,
+          "description": "Model type of the Argo float."
+        }
+      },
+      "relationships": [
+        "One-to-many with profiles (a float can record multiple profiles)"
+      ]
+    },
+    "profiles": {
+      "description": "Central table where each row represents a single vertical ocean profile (an ascent or descent).",
+      "columns": {
+        "profile_id": {
+          "type": "INTEGER",
           "nullable": false,
-          "description": "Hashed password for authentication"
+          "primary_key": true,
+          "auto_increment": true,
+          "description": "Unique, auto-incrementing integer serving as the primary key for profiles."
         },
-        "first_name": {
-          "type": "VARCHAR(50)",
-          "nullable": true,
-          "description": "User's first name"
-        },
-        "last_name": {
-          "type": "VARCHAR(50)",
-          "nullable": true,
-          "description": "User's last name"
-        },
-        "created_at": {
-          "type": "TIMESTAMP",
+        "float_id": {
+          "type": "INTEGER",
           "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "description": "Account creation timestamp"
+          "foreign_key": "floats.float_id",
+          "description": "Links a profile to the specific float that recorded it."
         },
-        "updated_at": {
-          "type": "TIMESTAMP",
-          "nullable": true,
-          "description": "Last account update timestamp"
-        },
-        "is_active": {
+        "is_bgc": {
           "type": "BOOLEAN",
           "nullable": false,
-          "default": true,
-          "description": "Whether the user account is active"
+          "description": "Flag indicating if the profile has corresponding biogeochemical (BGC) entries (TRUE/FALSE)."
         },
-        "last_login": {
-          "type": "TIMESTAMP",
+        "location": {
+          "type": "GEOMETRY(Point, 4326)",
           "nullable": true,
-          "description": "Last login timestamp"
+          "description": "Geographic coordinates (longitude, latitude) where the profile was taken."
+        },
+        "direction": {
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "description": "Direction of the profile (e.g., 'ascent', 'descent')."
+        },
+        "cycle_number": {
+          "type": "INTEGER",
+          "nullable": true,
+          "description": "Cycle number of the float when the profile was recorded."
+        },
+        "profile_time": {
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "description": "Exact time the profile was taken. Used as partition key for performance."
         }
       },
       "indexes": [
-        "idx_users_username",
-        "idx_users_email",
-        "idx_users_created_at"
+        "idx_profiles_is_bgc",
+        "idx_profiles_location",
+        "idx_profiles_float_id",
+        "idx_profiles_profile_time"
       ],
       "relationships": [
-        "One-to-many with chats (user can have multiple chats)",
-        "One-to-many with messages (user can send multiple messages)"
+        "Many-to-one with floats (profiles are recorded by a float)",
+        "One-to-many with measurements (a profile has many depth-level measurements)"
       ]
     },
-    "chats": {
-      "description": "Chat sessions between users and the system",
+    "measurements": {
+      "description": "Largest table, containing core physical sensor readings (pressure, temperature, salinity) for each depth level of all profiles.",
       "columns": {
-        "id": {
-          "type": "INTEGER",
+        "measurement_id": {
+          "type": "BIGINT",
           "nullable": false,
           "primary_key": true,
-          "description": "Unique chat identifier"
+          "auto_increment": true,
+          "description": "Unique identifier for each measurement record."
         },
-        "user_id": {
-          "type": "INTEGER",
+        "profile_id": {
+          "type": "BIGINT",
           "nullable": false,
-          "foreign_key": "users.id",
-          "description": "Reference to the user who started the chat"
+          "foreign_key": "profiles.profile_id",
+          "on_delete": "CASCADE",
+          "description": "Links each measurement record to its parent profile."
         },
-        "description": {
-          "type": "VARCHAR(255)",
-          "nullable": true,
-          "description": "Brief description or title of the chat"
-        },
-        "started_at": {
-          "type": "TIMESTAMP",
+        "pressure": {
+          "type": "DOUBLE PRECISION",
           "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "description": "When the chat session was started"
+          "description": "Pressure in decibars (proxy for depth)."
         },
-        "expires_at": {
-          "type": "TIMESTAMP",
+        "temperature": {
+          "type": "DOUBLE PRECISION",
           "nullable": true,
-          "description": "When the chat session expires"
+          "description": "In-situ sea water temperature in degrees Celsius."
+        },
+        "salinity": {
+          "type": "DOUBLE PRECISION",
+          "nullable": true,
+          "description": "Practical salinity of the sea water."
         }
       },
       "indexes": [
-        "idx_chats_user_id",
-        "idx_chats_started_at",
-        "idx_chats_expires_at"
+        "idx_measurements_profile_id",
+        "idx_measurements_pressure"
       ],
       "relationships": [
-        "Many-to-one with users (chat belongs to a user)",
-        "One-to-many with messages (chat can have multiple messages)"
+        "Many-to-one with profiles (measurements belong to a profile)",
+        "One-to-one with bgc_measurements (a physical measurement can have optional BGC readings)"
       ]
     },
-    "messages": {
-      "description": "Individual messages within chat sessions",
+    "bgc_measurements": {
+      "description": "Stores specific biogeochemical (BGC) sensor readings, only for BGC-enabled profiles.",
       "columns": {
-        "id": {
-          "type": "INTEGER",
+        "measurement_id": {
+          "type": "BIGINT",
           "nullable": false,
           "primary_key": true,
-          "description": "Unique message identifier"
+          "foreign_key": "measurements.measurement_id",
+          "description": "Primary key and foreign key linking directly to measurements.measurement_id, creating a one-to-one relationship."
         },
-        "user_id": {
-          "type": "INTEGER",
-          "nullable": false,
-          "foreign_key": "users.id",
-          "description": "Reference to the user who sent the message"
-        },
-        "chat_id": {
-          "type": "INTEGER",
-          "nullable": false,
-          "foreign_key": "chats.id",
-          "description": "Reference to the chat session"
-        },
-        "message": {
-          "type": "TEXT",
+        "oxygen": {
+          "type": "NUMERIC",
           "nullable": true,
-          "description": "The actual message content from the user"
+          "description": "Dissolved oxygen concentration in µmol/kg."
         },
-        "response": {
-          "type": "TEXT",
+        "nitrate": {
+          "type": "NUMERIC",
           "nullable": true,
-          "description": "The system's response to the message"
+          "description": "Nitrate concentration in µmol/kg."
         },
-        "message_index": {
-          "type": "INTEGER",
+        "chlorophyll": {
+          "type": "NUMERIC",
           "nullable": true,
-          "description": "Sequential index of the message in the chat"
-        },
-        "response_media_urls": {
-          "type": "TEXT",
-          "nullable": true,
-          "description": "URLs to any media files in the response"
-        },
-        "timestamp": {
-          "type": "TIMESTAMP",
-          "nullable": false,
-          "default": "CURRENT_TIMESTAMP",
-          "description": "When the message was sent"
+          "description": "Chlorophyll-a concentration in mg/m^3."
         }
       },
       "indexes": [
-        "idx_messages_user_id",
-        "idx_messages_chat_id",
-        "idx_messages_timestamp",
-        "idx_messages_message_index"
+        "idx_bgc_measurements_oxygen",
+        "idx_bgc_measurements_nitrate",
+        "idx_bgc_measurements_chlorophyll"
       ],
       "relationships": [
-        "Many-to-one with users (message belongs to a user)",
-        "Many-to-one with chats (message belongs to a chat)"
+        "One-to-one with measurements (BGC measurements correspond to a physical measurement point)"
       ]
     }
-  },
-  "common_queries": [
-    {
-      "description": "Get all active users",
-      "query": "SELECT * FROM users WHERE is_active = true",
-      "tables": ["users"]
-    },
-    {
-      "description": "Get chat history for a specific user",
-      "query": "SELECT c.*, COUNT(m.id) as message_count FROM chats c LEFT JOIN messages m ON c.id = m.chat_id WHERE c.user_id = ? GROUP BY c.id ORDER BY c.started_at DESC",
-      "tables": ["chats", "messages"]
-    },
-    {
-      "description": "Get recent messages in a chat",
-      "query": "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT 50",
-      "tables": ["messages"]
-    },
-    {
-      "description": "Get user information with latest chat",
-      "query": "SELECT u.*, c.started_at as last_chat_started FROM users u LEFT JOIN chats c ON u.id = c.user_id WHERE u.id = ? ORDER BY c.started_at DESC LIMIT 1",
-      "tables": ["users", "chats"]
-    }
-  ]
+  }
 }
