@@ -1,55 +1,85 @@
-// File: src/components/auth/Authentication.js
-// Description: A client component that provides a tabbed interface for users to switch between login and registration forms.
-
-
 'use client';
 import { useState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import styles from './Authentication.module.scss';
 
 export default function Authentication() {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
-  
-  // Form state
+  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
 
-  const handleSubmit = (e) => {
+  const isLogin = mode === 'login';
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (mode === 'register' && password !== confirmPassword) {
-      alert("Passwords do not match!");
+    setError('');
+
+    if (!isLogin && password !== confirmPassword) {
+      setError("Passwords do not match!");
       return;
     }
-    // Handle form submission logic here (e.g., call your API)
-    console.log({ mode, email, password });
+
+    if (isLogin) {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      });
+
+      if (result.error) {
+        setError('Invalid email or password');
+      } else {
+        router.push('/'); // Redirect to home/dashboard on successful login
+      }
+    } else {
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (res.ok) {
+          alert('Registration successful! Please log in.');
+          setMode('login');
+        } else {
+          const data = await res.json();
+          setError(data.message || 'Registration failed.');
+        }
+      } catch (err) {
+        setError('An error occurred during registration.');
+      }
+    }
   };
-  
-  const isLogin = mode === 'login';
 
   return (
     <div className={styles.container}>
-      {/* Tab Switcher */}
+      {/* START: Added Missing JSX for Tabs */}
       <div className={styles.tabContainer}>
-        <button 
+        <button
           className={`${styles.tab} ${isLogin ? styles.active : ''}`}
           onClick={() => setMode('login')}
         >
           Login
         </button>
-        <button 
+        <button
           className={`${styles.tab} ${!isLogin ? styles.active : ''}`}
           onClick={() => setMode('register')}
         >
           Register
         </button>
       </div>
+      {/* END: Added Missing JSX for Tabs */}
 
-      {/* Form Area */}
       <div className={styles.formContainer}>
-        <h1 className={styles.title}>
-          {isLogin ? 'Welcome Back' : 'Create Account'}
-        </h1>
+        <h1 className={styles.title}>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
+        {error && <p className={styles.error}>{error}</p>} {/* Make sure you have a .error class in your SCSS */}
         <form onSubmit={handleSubmit}>
+          {/* START: Added Missing JSX for Inputs */}
           <div className={styles.inputGroup}>
             <label htmlFor="email" className={styles.label}>Email</label>
             <input
@@ -72,8 +102,6 @@ export default function Authentication() {
               required
             />
           </div>
-          
-          {/* Conditional field for registration */}
           {!isLogin && (
             <div className={styles.inputGroup}>
               <label htmlFor="confirmPassword" className={styles.label}>Confirm Password</label>
@@ -87,7 +115,7 @@ export default function Authentication() {
               />
             </div>
           )}
-
+          {/* END: Added Missing JSX for Inputs */}
           <button type="submit" className={styles.submitButton}>
             {isLogin ? 'Login' : 'Create Account'}
           </button>
