@@ -289,6 +289,10 @@ class HTTPSQLMCPServer:
             if result.get("data") and len(result["data"]) > 0:
                 csv_path = await self.save_results_to_csv(result["data"], query)
                 result["csv_file"] = csv_path
+
+            del result['data']
+
+            print(f"SQL Query Execution Result: {json.dumps(result, indent=2)}")
             
             return result
             
@@ -370,6 +374,8 @@ class HTTPSQLMCPServer:
         try:
             with engine.connect() as connection:
                 result = connection.execute(text(query))
+
+                print(f"Raw SQLAlchemy Result: {result}")
                 
                 if result.returns_rows:
                     # Fetch all results

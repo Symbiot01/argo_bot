@@ -1,5 +1,5 @@
 {
-  "database_name": "postgres",
+  "database_name": "sih_data",
   "description": "Database for storing and analyzing Argo oceanographic data, including float metadata, ocean profiles, and physical/biogeochemical measurements.",
   "tables": {
     "floats": {
@@ -12,7 +12,7 @@
           "description": "Unique identifier for each Argo float."
         },
         "model": {
-          "type": "VARCHAR(255)",
+          "type": "TEXT",
           "nullable": true,
           "description": "Model type of the Argo float."
         }
@@ -22,133 +22,183 @@
       ]
     },
     "profiles": {
-      "description": "Central table where each row represents a single vertical ocean profile (an ascent or descent).",
+      "description": "Central table where each row represents a single vertical ocean profile. Uniquely identified by a combination of the float ID, its cycle number, and the profile direction.",
       "columns": {
-        "profile_id": {
-          "type": "INTEGER",
-          "nullable": false,
-          "primary_key": true,
-          "auto_increment": true,
-          "description": "Unique, auto-incrementing integer serving as the primary key for profiles."
-        },
         "float_id": {
           "type": "INTEGER",
           "nullable": false,
           "foreign_key": "floats.float_id",
-          "description": "Links a profile to the specific float that recorded it."
-        },
-        "is_bgc": {
-          "type": "BOOLEAN",
-          "nullable": false,
-          "description": "Flag indicating if the profile has corresponding biogeochemical (BGC) entries (TRUE/FALSE)."
-        },
-        "location": {
-          "type": "GEOMETRY(Point, 4326)",
-          "nullable": true,
-          "description": "Geographic coordinates (longitude, latitude) where the profile was taken."
-        },
-        "direction": {
-          "type": "VARCHAR(50)",
-          "nullable": true,
-          "description": "Direction of the profile (e.g., 'ascent', 'descent')."
+          "on_delete": "CASCADE",
+          "description": "Links a profile to the specific float that recorded it. Part of the composite primary key."
         },
         "cycle_number": {
           "type": "INTEGER",
-          "nullable": true,
-          "description": "Cycle number of the float when the profile was recorded."
+          "nullable": false,
+          "description": "Cycle number of the float when the profile was recorded. Part of the composite primary key."
+        },
+        "direction": {
+          "type": "CHAR(1)",
+          "nullable": false,
+          "description": "Direction of the profile (e.g., 'A' for ascent, 'D' for descent). Part of the composite primary key."
         },
         "profile_time": {
-          "type": "TIMESTAMP",
+          "type": "TIMESTAMP WITH TIME ZONE",
           "nullable": false,
-          "description": "Exact time the profile was taken. Used as partition key for performance."
+          "description": "Exact time the profile was taken."
+        },
+        "location": {
+          "type": "GEOGRAPHY(Point, 4326)",
+          "nullable": true,
+          "description": "Geographic coordinates (longitude, latitude) as a GEOGRAPHY type. Important: For spatial queries, use geography-aware functions like ST_Lat or cast to geometry (e.g., ST_Y(location::geometry)) to avoid type errors."
         }
       },
+      "primary_key": [
+        "float_id",
+        "cycle_number",
+        "direction"
+      ],
       "indexes": [
-        "idx_profiles_is_bgc",
+        "profiles_pkey",
         "idx_profiles_location",
-        "idx_profiles_float_id",
-        "idx_profiles_profile_time"
+        "idx_profiles_time"
       ],
       "relationships": [
         "Many-to-one with floats (profiles are recorded by a float)",
-        "One-to-many with measurements (a profile has many depth-level measurements)"
+        "One-to-many with measurements (a profile has many depth-level measurements)",
+        "One-to-many with bgc_measurements (a profile can have many BGC measurements)"
       ]
     },
     "measurements": {
-      "description": "Largest table, containing core physical sensor readings (pressure, temperature, salinity) for each depth level of all profiles.",
+      "description": "Largest table, containing core physical sensor readings (pressure, temperature, salinity) for each depth level of all profiles. Each measurement is uniquely identified by its parent profile and pressure level. If you want location for measurements, join with the 'profiles' table. use profile table with FK or JOIN operation to access location corrosponding to measurements.",
       "columns": {
-        "measurement_id": {
-          "type": "BIGINT",
+        "float_id": {
+          "type": "INTEGER",
           "nullable": false,
-          "primary_key": true,
-          "auto_increment": true,
-          "description": "Unique identifier for each measurement record."
+          "description": "Part of the composite primary and foreign key, identifying the float."
         },
-        "profile_id": {
-          "type": "BIGINT",
+        "cycle_number": {
+          "type": "INTEGER",
           "nullable": false,
-          "foreign_key": "profiles.profile_id",
-          "on_delete": "CASCADE",
-          "description": "Links each measurement record to its parent profile."
+          "description": "Part of the composite primary and foreign key, identifying the cycle."
+        },
+        "direction": {
+          "type": "CHAR(1)",
+          "nullable": false,
+          "description": "Part of the composite primary and foreign key, identifying the profile direction."
         },
         "pressure": {
-          "type": "DOUBLE PRECISION",
+          "type": "REAL",
           "nullable": false,
-          "description": "Pressure in decibars (proxy for depth)."
+          "description": "Pressure in decibars (proxy for depth). Part of the composite primary key."
         },
         "temperature": {
-          "type": "DOUBLE PRECISION",
+          "type": "REAL",
           "nullable": true,
           "description": "In-situ sea water temperature in degrees Celsius."
         },
         "salinity": {
-          "type": "DOUBLE PRECISION",
+          "type": "REAL",
           "nullable": true,
           "description": "Practical salinity of the sea water."
+        },
+        "profile_time": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "description": "Denormalized profile time for performance."
         }
       },
+      "primary_key": [
+        "float_id",
+        "cycle_number",
+        "direction",
+        "pressure"
+      ],
+      "foreign_keys": [
+        {
+          "columns": ["float_id", "cycle_number", "direction"],
+          "references": "profiles",
+          "on_delete": "CASCADE"
+        }
+      ],
       "indexes": [
-        "idx_measurements_profile_id",
-        "idx_measurements_pressure"
+        "measurements_pkey",
+        "idx_measurements_pressure",
+        "idx_measurements_profile"
       ],
       "relationships": [
         "Many-to-one with profiles (measurements belong to a profile)",
-        "One-to-one with bgc_measurements (a physical measurement can have optional BGC readings)"
+        "One-to-one with bgc_measurements (a physical measurement can have optional BGC readings, joined on the composite primary key)"
       ]
     },
     "bgc_measurements": {
-      "description": "Stores specific biogeochemical (BGC) sensor readings, only for BGC-enabled profiles.",
+      "description": "Stores specific biogeochemical (BGC) sensor readings. A row exists here only if the corresponding measurement in the 'measurements' table has BGC data.",
       "columns": {
-        "measurement_id": {
-          "type": "BIGINT",
+        "float_id": {
+          "type": "INTEGER",
           "nullable": false,
-          "primary_key": true,
-          "foreign_key": "measurements.measurement_id",
-          "description": "Primary key and foreign key linking directly to measurements.measurement_id, creating a one-to-one relationship."
+          "description": "Part of the composite primary and foreign key, identifying the float."
         },
-        "oxygen": {
-          "type": "NUMERIC",
+        "cycle_number": {
+          "type": "INTEGER",
+          "nullable": false,
+          "description": "Part of the composite primary and foreign key, identifying the cycle."
+        },
+        "direction": {
+          "type": "CHAR(1)",
+          "nullable": false,
+          "description": "Part of the composite primary and foreign key, identifying the profile direction."
+        },
+        "pressure": {
+          "type": "REAL",
+          "nullable": false,
+          "description": "Pressure in decibars. Part of the composite primary key."
+        },
+        "doxy": {
+          "type": "REAL",
           "nullable": true,
           "description": "Dissolved oxygen concentration in µmol/kg."
         },
+        "chla": {
+          "type": "REAL",
+          "nullable": true,
+          "description": "Chlorophyll-a concentration in mg/m^3."
+        },
         "nitrate": {
-          "type": "NUMERIC",
+          "type": "REAL",
           "nullable": true,
           "description": "Nitrate concentration in µmol/kg."
         },
-        "chlorophyll": {
-          "type": "NUMERIC",
+        "bbp700": {
+          "type": "REAL",
           "nullable": true,
-          "description": "Chlorophyll-a concentration in mg/m^3."
+          "description": "Optical backscattering at 700nm."
+        },
+        "ph_in_situ_total": {
+          "type": "REAL",
+          "nullable": true,
+          "description": "In-situ pH on the total scale."
         }
       },
+      "primary_key": [
+        "float_id",
+        "cycle_number",
+        "direction",
+        "pressure"
+      ],
+      "foreign_keys": [
+        {
+          "columns": ["float_id", "cycle_number", "direction"],
+          "references": "profiles",
+          "on_delete": "CASCADE"
+        }
+      ],
       "indexes": [
-        "idx_bgc_measurements_oxygen",
-        "idx_bgc_measurements_nitrate",
-        "idx_bgc_measurements_chlorophyll"
+        "bgc_measurements_pkey",
+        "idx_bgc_pressure"
       ],
       "relationships": [
-        "One-to-one with measurements (BGC measurements correspond to a physical measurement point)"
+        "One-to-one with measurements (BGC data corresponds to a physical measurement, linked by their shared composite primary key)",
+        "Many-to-one with profiles (BGC measurements belong to a profile)"
       ]
     }
   }

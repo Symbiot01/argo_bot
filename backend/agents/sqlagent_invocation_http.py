@@ -239,6 +239,86 @@ class HTTPSQLAgent:
                 "timestamp": datetime.now().isoformat()
             }
     
+    async def process_user_query(self, user_input: str, chat_id: Optional[str] = None, 
+                                argo_context: Optional[str] = "") -> Dict[str, Any]:
+        """
+        Process user query and return formatted response for combined pipeline
+        
+        Args:
+            user_input: User's natural language question
+            chat_id: Chat ID for conversation context (optional)
+            argo_context: Argo domain context (optional)
+            
+        Returns:
+            Dict containing formatted response for combined pipeline
+        """
+        try:
+            if not self.is_initialized:
+                await self.initialize()
+            
+            # Convert chat_id to int if provided
+            chat_id_int = None
+            if chat_id:
+                try:
+                    chat_id_int = int(chat_id)
+                except (ValueError, TypeError):
+                    logging.warning(f"Invalid chat_id format: {chat_id}")
+            
+            # Process the query
+            result = await self.process_query(
+                question=user_input,
+                database_name=None,  # Use default database
+                chat_id=chat_id_int
+            )
+
+            # print(f"SQL Agent Result: {json.dumps(result, indent=2)}")
+            
+            # Format response for combined pipeline
+            if result.get("success", False):
+                if result.get("response_type") == "sql":
+
+                    print(f"SQL Query: {result.get('sql_query')}")
+                    # SQL query was executed
+                    return {
+                        "success": True,
+                        "response": "SQL query executed successfully",
+                        "sql_query": result.get("sql_query"),
+                        "data": result.get("execution_result", {}).get("data", []),
+                        "csv_file": result.get("csv_file"),
+                        "response_type": "sql"
+                    }
+                elif result.get("response_type") == "html":
+                    # HTML response was generated
+                    return {
+                        "success": True,
+                        "response": result.get("html_content", ""),
+                        "response_type": "html"
+                    }
+                else:
+                    # Other response type
+                    return {
+                        "success": True,
+                        "response": str(result.get("response", "")),
+                        "response_type": "text"
+                    }
+            else:
+                # Error occurred
+                return {
+                    "success": False,
+                    "response": result.get("error", "An error occurred"),
+                    "error_message": result.get("error"),
+                    "response_type": "error"
+                }
+                
+        except Exception as e:
+            logging.error(f"Error in process_user_query: {e}")
+            return {
+                "success": False,
+                "response": f"An error occurred: {str(e)}",
+                "error_message": str(e),
+                "response_type": "error"
+            }
+
     async def cleanup(self):
         """Clean up resources"""
         try:

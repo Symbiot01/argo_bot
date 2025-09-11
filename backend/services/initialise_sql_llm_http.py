@@ -292,7 +292,7 @@ CONVERSATION CONTEXT:
     return sql_rag_chain
 
 async def execute_sql_with_context_http(sql_chain, http_mcp_client, question: str, 
-                                        database_name: str = None, chat_id: Optional[int] = None) -> Dict[str, Any]:
+                                        database_name: str = 'sih_data', chat_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Execute SQL query processing pipeline that handles both SQL and HTML responses.
     HTTP-based version that uses HTTP MCP client.
@@ -308,6 +308,9 @@ async def execute_sql_with_context_http(sql_chain, http_mcp_client, question: st
         Dict containing the response, execution results, and CSV file path if applicable
     """
     try:
+
+        database_name = database_name or "sih_data"
+
         # Generate response using SQL chain
         logging.info(f"Processing question (HTTP): {question}")
         
@@ -353,6 +356,8 @@ async def execute_sql_with_context_http(sql_chain, http_mcp_client, question: st
             
             # Execute query through HTTP MCP client
             result = await http_mcp_client.execute_sql_query(sql_query, database_name)
+
+            # print(f"SQL Query Execution Result (HTTP): {json.dumps(result, indent=2)}")
             
             response = {
                 "question": question,
@@ -365,6 +370,8 @@ async def execute_sql_with_context_http(sql_chain, http_mcp_client, question: st
             
             if "csv_file" in result:
                 response["csv_file"] = result["csv_file"]
+                # Add document link for visualization LLM
+                response["document_link"] = result["csv_file"]
                 logging.info(f"Query executed successfully (HTTP). Results saved to: {result['csv_file']}")
             
             return response
@@ -481,6 +488,8 @@ async def execute_sql_query_http(query: str, database_name: str = None) -> Dict[
             return {"error": "Failed to connect to HTTP MCP server"}
         
         result = await client.execute_sql_query(query, database_name)
+
+        # print(f"SQL Query Execution Result (HTTP): {result}")
         return result
     except Exception as e:
         return {"error": str(e)}
