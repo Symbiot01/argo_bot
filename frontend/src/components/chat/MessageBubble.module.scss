@@ -1,6 +1,3 @@
-// File: src/components/chat/MessageBubble.module.scss
-// Description: Styles for the chat messages, distinguishing between the user and the AI.
-
 @import "../../styles/variables";
 
 .bubble {
@@ -8,19 +5,55 @@
   padding: 0.75rem 1rem;
   border-radius: 12px;
   line-height: 1.5;
-  text-align: left; /* Changed from center to left */
-  width: fit-content; /* Ensure bubble is only as wide as its content */
+  text-align: left;
+  width: fit-content;
+  
+  ul,
+  ol {
+    padding-left: 24px;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
 }
 
 .user {
   background-color: $accent-interactive;
   color: white;
-  align-self: flex-end; /* Aligns to the right */
+  align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
 
 .ai {
   background-color: $ui-secondary;
-  align-self: flex-start; /* Aligns to the left */
+  align-self: flex-start;
   border-bottom-left-radius: 4px;
+}
+
+// --- ADD OR MODIFY THESE STYLES ---
+
+.visualizationContainer {
+  margin-top: 1rem; // Add some space above the image
+  display: block; // Ensure it takes full width if needed
+  overflow: hidden; // Important for containing the image
+  border-radius: 8px; // Optional: round the corners of the image container
+}
+
+.visualizationImage {
+  display: block; // Ensures consistent sizing behavior
+  width: auto; // Allow width to scale based on height or max-width
+  height: auto; // Allow height to scale based on width or max-height
+  
+  max-width: 100%; // Ensures image doesn't exceed its parent's width
+  max-height: 1200px; // Limits the maximum height to 1200px
+
+  // This is the key part: if the image is larger than 1200px in width OR height,
+  // it will scale down proportionally to fit within BOTH 100% of its parent's width
+  // AND the 1200px max-height.
+  // The 'contain' value ensures the entire image is visible, potentially with empty space.
+  // 'cover' would fill the space, potentially cropping the image.
+  object-fit: contain; 
+
+  // Optional: if you want a border around the image
+  // border: 1px solid $ui-border-color; 
+  border-radius: inherit; // Inherit from container if set
 }

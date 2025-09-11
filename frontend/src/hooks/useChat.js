@@ -111,13 +111,14 @@ import { useState } from 'react';
 export const useChat = (session) => {
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
-  // REMOVED: No longer need to track chatId state for now.
-  // const [chatId, setChatId] = useState(null);
 
+  // --- NEW, ENHANCED FALLBACK OBJECT ---
   const apiErrorFallback = {
     sender: 'ai',
-    text: "The API is currently unavailable. Please try again later. This is a fallback message.",
-    imageUrl: null,
+    // 1. Markdown formatted text for a richer display
+    text: `### 🚨 API Connection Error\n\nI was unable to connect to the backend services. Please check the server status and try your request again in a few moments.\n\n**Possible Actions:**\n* Verify your internet connection.\n* Check the official [Service Status Page](https://status.example.com).\n* If the issue persists, please contact support.\n\n*This is a fallback message.*`,
+    // 2. A placeholder image to visually indicate an error
+    imageUrl: 'https://placehold.co/3000x1400/f87171/ffffff?text=Service+Unavailable',
   };
 
   const sendMessage = async (text) => {
@@ -125,18 +126,22 @@ export const useChat = (session) => {
     setIsThinking(true);
 
     try {
-      // CHANGED: We now call the pipeline directly on every message.
-      const tempChatId = "temp-chat-session-123"; // A random placeholder chat ID
-      const tempUserId = session.user.name;       // We can still use the actual user's name
+      const tempChatId = "temp-chat-session-123";
+      
+      // 3. CRITICAL FIX: The user ID from the session is required by the backend.
+      const tempUserId = session.user.name; 
 
       const response = await fetch('/api/chat/pipeline', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // 4. CRITICAL FIX: The Authorization header is required for protected routes.
+          'Authorization': `Bearer ${session.accessToken}`,
         },
         body: JSON.stringify({
           user_input: text,
-          chat_id: tempChatId, // Using the temporary ID // Using the temporary ID
+          chat_id: tempChatId,
+          user_id: tempUserId, // Added user_id back in
           include_visualization: true,
         }),
       });
@@ -159,6 +164,7 @@ export const useChat = (session) => {
 
     } catch (error) {
       console.error("Failed to send message:", error);
+      // The enhanced fallback object will be used here on any error
       setMessages(prev => [...prev, apiErrorFallback]);
     } finally {
       setIsThinking(false);
