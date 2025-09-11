@@ -9,12 +9,12 @@ const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL;
 export async function POST(req) {
   try {
     const headersList = headers();
-    const authorization = headersList.get('authorization');
+    // const authorization = headersList.get('authorization');
     const body = await req.json();
 
-    if (!authorization) {
-      return NextResponse.json({ message: 'Authorization header missing' }, { status: 401 });
-    }
+    // if (!authorization) {
+    //   return NextResponse.json({ message: 'Authorization header missing' }, { status: 401 });
+    // }
 
     const apiRes = await fetch(`${BACKEND_API_URL}api/v1/pipeline/combined-pipeline`, {
       method: 'POST',
