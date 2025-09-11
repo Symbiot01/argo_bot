@@ -1,58 +1,95 @@
-import NextAuth from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-// In a real application, you would use a library like bcryptjs to securely hash and compare passwords.
-// import bcrypt from 'bcryptjs';
 
-// --- MOCK DATABASE ---
-// In a real application, this would be a connection to your database (e.g., PostgreSQL, MongoDB, Supabase).
-// NOTE: This array is only for this file. The register route has its own, demonstrating the need for a shared database.
-const users = [
-  { id: '1', name: 'Alex Ray', email: 'alex.ray@oceandata.io', password: 'password123' }
-];
-// --------------------
+// File: src/app/api/auth/[...nextauth]/route.js
+
+import NextAuth from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+
+// Ensure this is set in your .env.local file
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET;
+// The base URL of your FastAPI backend
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL;
+
+if (!NEXTAUTH_SECRET) {
+  throw new Error("NEXTAUTH_SECRET is not set in environment variables!");
+}
+if (!BACKEND_API_URL) {
+  throw new Error("NEXT_PUBLIC_BACKEND_API_URL is not set in environment variables!");
+}
+
 
 export const authOptions = {
   providers: [
     CredentialsProvider({
-      name: 'Credentials',
+      name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // This is where you retrieve a user from your database and check their password.
-        if (!credentials) {
+        if (!credentials?.username || !credentials?.password) {
           return null;
         }
 
-        const user = users.find(u => u.email === credentials.email);
+        // The backend expects 'x-www-form-urlencoded' data for login
+        const params = new URLSearchParams();
+        params.append('username', credentials.username);
+        params.append('password', credentials.password);
 
-        // IMPORTANT: In a real app, you MUST compare hashed passwords.
-        // const isPasswordCorrect = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (user && user.password === credentials.password) {
-          // If the credentials are valid, return the user object (without the password).
-          return { id: user.id, name: user.name, email: user.email };
+        try {
+          // CORRECTED: Added /api/v1 to the fetch URL
+          const res = await fetch(`${BACKEND_API_URL}api/v1/login`, {
+            method: 'POST',
+            body: params,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          });
+
+          if (!res.ok) {
+            console.error("Failed to login with backend:", res.status, await res.text());
+            return null; // Authentication failed
+          }
+
+          const tokenData = await res.json();
+          
+          const user = {
+            id: credentials.username,
+            name: credentials.username,
+            accessToken: tokenData.access_token,
+          };
+
+          return user;
+
+        } catch (error) {
+          console.error("Error during authorization:", error);
+          return null;
         }
-        
-        // If credentials are not valid, return null.
-        return null;
-      }
-    })
+      },
+    }),
   ],
+  
+  secret: NEXTAUTH_SECRET,
+
   session: {
-    // Use JSON Web Tokens for session management.
-    strategy: 'jwt',
+    strategy: "jwt", // Use JWTs for session management
   },
-  // A secret is required to sign the JWTs. This must be in your .env.local file.
-  secret: process.env.NEXTAUTH_SECRET,
+
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.accessToken = user.accessToken;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.accessToken = token.accessToken;
+      return session;
+    },
+  },
+
   pages: {
-    // Tell NextAuth.js where your custom sign-in page is located.
-    // The middleware will use this to redirect unauthenticated users.
-    signIn: '/authenticate',
+    signIn: '/authenticate', // Redirect users to this page for login
   },
 };
 
-// This exports the handler that Next.js will use for all requests to /api/auth/*
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

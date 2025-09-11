@@ -1,13 +1,22 @@
-// File: src/app/(auth)/layout.js
-'use client';
-import styles from './layout.module.scss';
+// File: src/app/(main)/layout.js
 
-// This layout's only job is to center the auth form on the page.
-// It should NOT include the Sidebar.
-export default function AuthLayout({ children }) {
+'use client';
+import Sidebar from '../../components/layout/Sidebar';
+import { useSidebar } from '../../context/SidebarContext';
+import styles from './layout.module.scss';
+// REMOVED: No longer need the custom AuthProvider
+
+export default function MainAppLayout({ children }) {
+  const { isOpen } = useSidebar();
+  const contentClasses = `${styles.contentWrapper} ${isOpen ? styles.sidebarOpen : styles.sidebarClosed}`;
+
   return (
-    <main className={styles.container}>
-      {children}
-    </main>
+    // REMOVED: The AuthProvider wrapper is gone
+    <div>
+      <Sidebar />
+      <main className={contentClasses}>
+        {children}
+      </main>
+    </div>
   );
 }

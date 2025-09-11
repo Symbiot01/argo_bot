@@ -20,6 +20,7 @@ export default function RootLayout({ children }) {
           <SidebarProvider>
             <DynamicBackground />
             {children}
+          
           </SidebarProvider>
         </AuthSessionProvider>
       </body>

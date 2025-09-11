@@ -1,15 +1,18 @@
+// Path: src/components/auth/Authentication.js
 'use client';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import styles from './Authentication.module.scss';
+import styles from './Authentication.module.scss'; // Assuming styles are in the same folder
 
 export default function Authentication() {
   const [mode, setMode] = useState('login');
+  const [username, setUsername] = useState(''); // ADDED username state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // ADDED for better UX
   const router = useRouter();
 
   const isLogin = mode === 'login';
@@ -17,30 +20,34 @@ export default function Authentication() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (!isLogin && password !== confirmPassword) {
       setError("Passwords do not match!");
+      setIsLoading(false);
       return;
     }
 
     if (isLogin) {
+      // Use NextAuth's signIn function to handle the redirect automatically
       const result = await signIn('credentials', {
-        redirect: false,
-        email,
+        // REMOVED: redirect: false
+        username,
         password,
+        callbackUrl: '/', // ADDED: Tell NextAuth where to redirect on success
       });
 
+      // This part now only runs if there was an error
       if (result.error) {
-        setError('Invalid email or password');
-      } else {
-        router.push('/'); // Redirect to home/dashboard on successful login
+        setError('Invalid username or password');
+        setIsLoading(false); // Stop loading on error
       }
-    } else {
+    } else { // Registration Logic
       try {
         const res = await fetch('/api/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ username, email, password }),
         });
 
         if (res.ok) {
@@ -54,11 +61,11 @@ export default function Authentication() {
         setError('An error occurred during registration.');
       }
     }
+    setIsLoading(false);
   };
 
   return (
     <div className={styles.container}>
-      {/* START: Added Missing JSX for Tabs */}
       <div className={styles.tabContainer}>
         <button
           className={`${styles.tab} ${isLogin ? styles.active : ''}`}
@@ -73,24 +80,39 @@ export default function Authentication() {
           Register
         </button>
       </div>
-      {/* END: Added Missing JSX for Tabs */}
-
+      
       <div className={styles.formContainer}>
         <h1 className={styles.title}>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
-        {error && <p className={styles.error}>{error}</p>} {/* Make sure you have a .error class in your SCSS */}
+        {error && <p className={styles.error}>{error}</p>}
         <form onSubmit={handleSubmit}>
-          {/* START: Added Missing JSX for Inputs */}
+          {/* ADDED USERNAME FIELD */}
           <div className={styles.inputGroup}>
-            <label htmlFor="email" className={styles.label}>Email</label>
+            <label htmlFor="username" className={styles.label}>Username</label>
             <input
-              type="email"
-              id="email"
+              type="text"
+              id="username"
               className={styles.input}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>
+
+          {/* Email field is now only for registration */}
+          {!isLogin && (
+            <div className={styles.inputGroup}>
+              <label htmlFor="email" className={styles.label}>Email</label>
+              <input
+                type="email"
+                id="email"
+                className={styles.input}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
           <div className={styles.inputGroup}>
             <label htmlFor="password" className={styles.label}>Password</label>
             <input
@@ -102,6 +124,7 @@ export default function Authentication() {
               required
             />
           </div>
+
           {!isLogin && (
             <div className={styles.inputGroup}>
               <label htmlFor="confirmPassword" className={styles.label}>Confirm Password</label>
@@ -115,9 +138,9 @@ export default function Authentication() {
               />
             </div>
           )}
-          {/* END: Added Missing JSX for Inputs */}
-          <button type="submit" className={styles.submitButton}>
-            {isLogin ? 'Login' : 'Create Account'}
+          
+          <button type="submit" className={styles.submitButton} disabled={isLoading}>
+            {isLoading ? 'Processing...' : (isLogin ? 'Login' : 'Create Account')}
           </button>
         </form>
       </div>
